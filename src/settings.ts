@@ -18,6 +18,7 @@ export interface CaptureSettings {
 	defaults: EntryFormat;
 	embedAudio: boolean;
 	afterSend: AfterSend;
+	openKeyboardOnMobile: boolean;
 	tagGroups: TagGroup[];
 	modes: CaptureMode[];
 	lastDestinationId: string;
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
 	},
 	embedAudio: true,
 	afterSend: "close",
+	openKeyboardOnMobile: true,
 	tagGroups: [],
 	modes: [dailyMode([])],
 	lastDestinationId: DAILY_MODE_ID,
@@ -93,6 +95,7 @@ function migrateLegacy(legacy: Partial<LegacySettings>): CaptureSettings {
 		defaults: { ...format, heading: heading?.text ?? "", headingLevel: heading?.level ?? DEFAULT_HEADING_LEVEL },
 		embedAudio: legacy.embedAudio ?? DEFAULT_SETTINGS.embedAudio,
 		afterSend: legacy.afterSend ?? DEFAULT_SETTINGS.afterSend,
+		openKeyboardOnMobile: DEFAULT_SETTINGS.openKeyboardOnMobile,
 		tagGroups,
 		modes: [dailyMode(tagGroups.map((group) => group.id))],
 		lastDestinationId: DAILY_MODE_ID,
