@@ -9,14 +9,14 @@ import { ObsidianNoteTargets } from "./infrastructure/ObsidianNoteTargets";
 import { ObsidianNoteWriter } from "./infrastructure/ObsidianNoteWriter";
 import { CaptureSettings, loadSettings } from "./settings";
 import { CaptureModal } from "./ui/CaptureModal";
-import { todayTitle } from "./ui/CaptureScreen";
+import { NO_DESTINATIONS, todayTitle } from "./ui/CaptureScreen";
 import { SettingsHost, SettingsTab } from "./ui/SettingsTab";
 
 const DESTINATION_COMMAND_PREFIX = "capture-";
 
 export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 	override settings: CaptureSettings = loadSettings(null);
-	private openCapture: (destinationId: string) => void = () => {};
+	private openCapture: (destinationId: string, fallBackToFirst: boolean) => void = () => {};
 	private destinationCommandIds: string[] = [];
 
 	override async onload(): Promise<void> {
@@ -31,10 +31,13 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 			clock: systemClock,
 			settings: () => this.settings,
 		});
-		this.openCapture = (destinationId) => {
-			const destination = pickDestination(listDestinations(this.settings.modes, todayTitle()), destinationId);
+		this.openCapture = (destinationId, fallBackToFirst) => {
+			const destinations = listDestinations(this.settings.modes, todayTitle());
+			const destination = fallBackToFirst
+				? pickDestination(destinations, destinationId)
+				: destinations.find((candidate) => candidate.id === destinationId);
 			if (!destination) {
-				new Notice("Add a file in Quick Capture settings");
+				new Notice(fallBackToFirst ? NO_DESTINATIONS : "This file is no longer in Quick Capture settings");
 				return;
 			}
 			new CaptureModal(this.app, {
@@ -52,7 +55,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 				linkSourcePath: (destination) => targets.previewPath(destination.target),
 			}).open();
 		};
-		const openLast = () => this.openCapture(this.settings.lastDestinationId);
+		const openLast = () => this.openCapture(this.settings.lastDestinationId, true);
 
 		this.addRibbonIcon("mic", "Open quick capture", openLast);
 		this.addCommand({ id: "open", name: "Open quick capture", callback: openLast });
@@ -69,7 +72,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 		for (const id of this.destinationCommandIds) this.removeCommandById(id);
 		this.destinationCommandIds = listDestinations(this.settings.modes, "daily note").map((destination) => {
 			const id = `${DESTINATION_COMMAND_PREFIX}${destination.id}`;
-			this.addCommand({ id, name: `Capture to ${destination.title}`, callback: () => this.openCapture(destination.id) });
+			this.addCommand({ id, name: `Capture to ${destination.title}`, callback: () => this.openCapture(destination.id, false) });
 			return id;
 		});
 	}

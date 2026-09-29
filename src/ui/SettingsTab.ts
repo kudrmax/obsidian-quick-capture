@@ -139,15 +139,20 @@ export class SettingsTab extends PluginSettingTab {
 			);
 		}
 
-		new Setting(box).setName("Writes to").addDropdown((dropdown) =>
-			dropdown
-				.addOptions({ daily: "Daily note", files: "Files" })
-				.setValue(mode.target.type)
-				.onChange(async (value) => {
-					mode.target = value === "daily" ? { type: "daily" } : { type: "files", files: [emptyFile()] };
-					await this.saveAndRedraw();
-				}),
-		);
+		const hasFiles = mode.target.type === "files" && mode.target.files.some((file) => file.path.trim() !== "");
+		new Setting(box)
+			.setName("Writes to")
+			.setDesc(hasFiles ? "Remove the files below to switch to the daily note." : "")
+			.addDropdown((dropdown) =>
+				dropdown
+					.setDisabled(hasFiles)
+					.addOptions({ daily: "Daily note", files: "Files" })
+					.setValue(mode.target.type)
+					.onChange(async (value) => {
+						mode.target = value === "daily" ? { type: "daily" } : { type: "files", files: [emptyFile()] };
+						await this.saveAndRedraw();
+					}),
+			);
 		const target = mode.target;
 		if (target.type === "files") {
 			target.files.forEach((file, fileIndex) => this.fileSetting(box, target.files, file, fileIndex));

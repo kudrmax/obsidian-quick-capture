@@ -33,6 +33,8 @@ interface ControlSpec {
 
 const SAMPLE_INTERVAL_MS = 60;
 
+export const NO_DESTINATIONS = "Add a file in Quick Capture settings";
+
 export function todayTitle(): string {
 	return new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
@@ -157,8 +159,23 @@ export class CaptureScreen {
 	}
 
 	private destination(): Destination {
-		this.current = pickDestination(this.destinations(), this.current.id) ?? this.current;
+		const destinations = this.destinations();
+		const current = destinations.find((destination) => destination.id === this.current.id);
+		if (current) this.current = current;
+		else if (destinations.length > 0) this.moveTo(destinations[0]);
 		return this.current;
+	}
+
+	private isAvailable(destination: Destination): boolean {
+		return this.destinations().some((candidate) => candidate.id === destination.id);
+	}
+
+	private moveTo(destination: Destination): void {
+		this.current = destination;
+		const kept = retainTags(this.selectedTags, this.modeTagGroups());
+		this.selectedTags.clear();
+		kept.forEach((tag) => this.selectedTags.add(tag));
+		this.options.onDestinationChange(destination.id);
 	}
 
 	private modeTagGroups() {
@@ -166,11 +183,9 @@ export class CaptureScreen {
 	}
 
 	private switchDestination(id: string): void {
-		this.current = pickDestination(this.destinations(), id) ?? this.current;
-		const kept = retainTags(this.selectedTags, this.modeTagGroups());
-		this.selectedTags.clear();
-		kept.forEach((tag) => this.selectedTags.add(tag));
-		this.options.onDestinationChange(this.current.id);
+		const destination = pickDestination(this.destinations(), id);
+		if (!destination) return;
+		this.moveTo(destination);
 		this.renderTitle();
 		this.renderControls();
 	}
@@ -255,6 +270,10 @@ export class CaptureScreen {
 		const previous = this.state;
 		const tags = [...this.selectedTags];
 		const destination = this.destination();
+		if (!this.isAvailable(destination)) {
+			new Notice(NO_DESTINATIONS);
+			return;
+		}
 		this.sendingAudio = previous === "stopped";
 		this.tagPicker.close();
 		this.modePicker.close();
