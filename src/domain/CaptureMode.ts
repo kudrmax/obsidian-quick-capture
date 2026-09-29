@@ -21,7 +21,16 @@ export interface FormatOverrides {
 	audioSuffix: string;
 }
 
-export type ModeTarget = { type: "daily" } | { type: "file"; path: string };
+export type NoteTarget = { type: "daily" } | { type: "file"; path: string };
+
+export interface ModeFile {
+	id: string;
+	alias: string;
+	path: string;
+	lastUsedAt: number;
+}
+
+export type ModeTarget = { type: "daily" } | { type: "files"; files: ModeFile[] };
 
 export interface CaptureMode {
 	id: string;
@@ -29,6 +38,13 @@ export interface CaptureMode {
 	target: ModeTarget;
 	overrides: FormatOverrides;
 	tagGroupIds: string[];
+}
+
+export interface Destination {
+	id: string;
+	mode: CaptureMode;
+	title: string;
+	target: NoteTarget;
 }
 
 export interface ResolvedFormat {
@@ -67,20 +83,51 @@ export function modeTagGroups<G extends { id: string }>(groups: G[], mode: Captu
 	return groups.filter((group) => mode.tagGroupIds.includes(group.id));
 }
 
-export function pickMode(modes: CaptureMode[], id: string): CaptureMode {
-	return modes.find((mode) => mode.id === id) ?? modes[0];
+export function listDestinations(modes: CaptureMode[], today: string): Destination[] {
+	return modes.flatMap((mode): Destination[] => {
+		if (mode.target.type === "daily") {
+			return [{ id: mode.id, mode, title: mode.title.trim() || today, target: { type: "daily" } }];
+		}
+		return byLastUse(mode.target.files.filter((file) => isNotePath(file.path))).map((file) => ({
+			id: file.id,
+			mode,
+			title: file.alias.trim() || noteName(file.path),
+			target: { type: "file", path: file.path.trim() },
+		}));
+	});
 }
 
-export function modeTitle(mode: CaptureMode, today: string): string {
-	const title = mode.title.trim();
-	if (title !== "") return title;
-	return mode.target.type === "daily" ? today : "Untitled mode";
+export function pickDestination(destinations: Destination[], id: string): Destination | undefined {
+	return destinations.find((destination) => destination.id === id) ?? destinations[0];
 }
 
-export function targetProblem(mode: CaptureMode): string | null {
-	if (mode.target.type === "daily") return null;
-	if (/\.md$/i.test(mode.target.path.trim())) return null;
-	return `Choose a file for mode "${modeTitle(mode, "Daily note")}"`;
+export function markUsed(modes: CaptureMode[], destinationId: string, at: number): boolean {
+	for (const mode of modes) {
+		if (mode.target.type !== "files") continue;
+		const file = mode.target.files.find((candidate) => candidate.id === destinationId);
+		if (file) {
+			file.lastUsedAt = at;
+			return true;
+		}
+	}
+	return false;
+}
+
+export function destinationProblem(destination: Destination): string | null {
+	if (destination.target.type === "daily" || isNotePath(destination.target.path)) return null;
+	return `Choose a file for "${destination.title}"`;
+}
+
+function byLastUse(files: ModeFile[]): ModeFile[] {
+	return [...files].sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+}
+
+function isNotePath(path: string): boolean {
+	return /\.md$/i.test(path.trim());
+}
+
+export function noteName(path: string): string {
+	return (path.trim().split("/").pop() ?? "").replace(/\.md$/i, "");
 }
 
 export function retainTags(selected: Iterable<string>, groups: { tags: { tag: string }[] }[]): string[] {

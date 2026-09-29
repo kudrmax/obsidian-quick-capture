@@ -1,7 +1,7 @@
-import { ModeTarget } from "../domain/CaptureMode";
+import { NoteTarget } from "../domain/CaptureMode";
 
 export interface NoteTargets {
-	resolve(target: ModeTarget): Promise<string>;
+	resolve(target: NoteTarget): Promise<string>;
 }
 
 export interface NoteWriter {

@@ -20,7 +20,7 @@ export interface CaptureSettings {
 	afterSend: AfterSend;
 	tagGroups: TagGroup[];
 	modes: CaptureMode[];
-	lastModeId: string;
+	lastDestinationId: string;
 }
 
 const DAILY_MODE_ID = "daily";
@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
 	afterSend: "close",
 	tagGroups: [],
 	modes: [dailyMode([])],
-	lastModeId: DAILY_MODE_ID,
+	lastDestinationId: DAILY_MODE_ID,
 };
 
 interface LegacySettings extends Omit<EntryFormat, "headingLevel"> {
@@ -50,8 +50,31 @@ interface LegacySettings extends Omit<EntryFormat, "headingLevel"> {
 
 export function loadSettings(saved: unknown): CaptureSettings {
 	const data = typeof saved === "object" && saved !== null ? (saved as Record<string, unknown>) : {};
-	const settings = "modes" in data ? { ...DEFAULT_SETTINGS, ...data } : migrateLegacy(data as Partial<LegacySettings>);
-	return structuredClone(settings as CaptureSettings);
+	const settings = "modes" in data ? migrateModes(data) : migrateLegacy(data as Partial<LegacySettings>);
+	return structuredClone(settings);
+}
+
+type SingleFileMode = Omit<CaptureMode, "target"> & { target: { type: "file"; path: string } };
+
+interface SavedSettings extends Omit<CaptureSettings, "modes"> {
+	modes: (CaptureMode | SingleFileMode)[];
+	lastModeId?: string;
+}
+
+function migrateModes(data: Record<string, unknown>): CaptureSettings {
+	const saved = data as Partial<SavedSettings>;
+	const { lastModeId, modes, ...rest } = { ...DEFAULT_SETTINGS, ...saved } as SavedSettings;
+	return {
+		...rest,
+		modes: modes.map(toFilesMode),
+		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
+	};
+}
+
+function toFilesMode(mode: CaptureMode | SingleFileMode): CaptureMode {
+	if (mode.target.type !== "file") return mode as CaptureMode;
+	const file = { id: mode.id, alias: mode.title, path: mode.target.path, lastUsedAt: 0 };
+	return { ...mode, target: { type: "files", files: [file] } };
 }
 
 let idCounter = 0;
@@ -72,7 +95,7 @@ function migrateLegacy(legacy: Partial<LegacySettings>): CaptureSettings {
 		afterSend: legacy.afterSend ?? DEFAULT_SETTINGS.afterSend,
 		tagGroups,
 		modes: [dailyMode(tagGroups.map((group) => group.id))],
-		lastModeId: DAILY_MODE_ID,
+		lastDestinationId: DAILY_MODE_ID,
 	};
 }
 

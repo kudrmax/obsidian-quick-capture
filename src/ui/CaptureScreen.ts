@@ -2,7 +2,7 @@ import { Notice, setIcon } from "obsidian";
 import { CaptureError, CaptureService, TargetError } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
-import { CaptureMode, modeTagGroups, modeTitle, pickMode, retainTags } from "../domain/CaptureMode";
+import { Destination, listDestinations, modeTagGroups, pickDestination, retainTags } from "../domain/CaptureMode";
 import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
 import { ModePicker } from "./ModePicker";
@@ -13,10 +13,11 @@ export interface CaptureScreenOptions {
 	service: CaptureService;
 	createRecorder: () => AudioRecorder;
 	settings: () => CaptureSettings;
-	initialModeId: string;
-	onModeChange: (id: string) => void;
+	initial: Destination;
+	onDestinationChange: (id: string) => void;
+	onCaptured: (id: string) => void;
 	autoFocus: boolean;
-	decorateTextInput: (textarea: HTMLTextAreaElement, mode: () => CaptureMode) => void;
+	decorateTextInput: (textarea: HTMLTextAreaElement, destination: () => Destination) => void;
 	onClose: () => void;
 }
 
@@ -31,6 +32,12 @@ interface ControlSpec {
 }
 
 const SAMPLE_INTERVAL_MS = 60;
+
+export const NO_DESTINATIONS = "Add a file in Quick Capture settings";
+
+export function todayTitle(): string {
+	return new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
 const SWIPE_DISTANCE_PX = 60;
 
 export class CaptureScreen {
@@ -51,8 +58,8 @@ export class CaptureScreen {
 	private readonly selectedTags = new Set<string>();
 	private readonly tagPicker: TagPicker;
 	private readonly modePicker: ModePicker;
-	private readonly today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-	private modeId: string;
+	private readonly today = todayTitle();
+	private current: Destination;
 	private readonly footerObserver: ResizeObserver;
 
 	private recorder: AudioRecorder | null = null;
@@ -64,7 +71,7 @@ export class CaptureScreen {
 	private touchStart: { x: number; y: number } | null = null;
 
 	constructor(container: HTMLElement, private readonly options: CaptureScreenOptions) {
-		this.modeId = options.initialModeId;
+		this.current = options.initial;
 		this.root = container.createDiv({ cls: "dqc-screen" });
 		this.root.addEventListener("touchstart", (event) => this.onTouchStart(event), { passive: true });
 		this.root.addEventListener("touchend", (event) => this.onTouchEnd(event), { passive: true });
@@ -88,7 +95,7 @@ export class CaptureScreen {
 			this.renderControls();
 		});
 		this.textarea.addEventListener("scroll", () => (this.highlightEl.scrollTop = this.textarea.scrollTop));
-		options.decorateTextInput(this.textarea, () => this.mode());
+		options.decorateTextInput(this.textarea, () => this.destination());
 
 		const recorderView = body.createDiv({ cls: "dqc-recorder" });
 		this.statusEl = recorderView.createDiv({ cls: "dqc-status" });
@@ -110,10 +117,9 @@ export class CaptureScreen {
 		this.modePicker = new ModePicker(
 			this.root,
 			this.titleEl,
-			() => this.options.settings().modes,
-			() => this.mode().id,
-			(mode) => modeTitle(mode, this.today),
-			(id) => this.switchMode(id),
+			() => this.destinations(),
+			() => this.destination().id,
+			(id) => this.switchDestination(id),
 			() => this.renderTitle(),
 		);
 		this.confirmEl = this.root.createDiv({ cls: "dqc-confirm" });
@@ -148,20 +154,38 @@ export class CaptureScreen {
 		this.releaseRecorder();
 	}
 
-	private mode(): CaptureMode {
-		return pickMode(this.options.settings().modes, this.modeId);
+	private destinations(): Destination[] {
+		return listDestinations(this.options.settings().modes, this.today);
 	}
 
-	private modeTagGroups() {
-		return modeTagGroups(this.options.settings().tagGroups, this.mode());
+	private destination(): Destination {
+		const destinations = this.destinations();
+		const current = destinations.find((destination) => destination.id === this.current.id);
+		if (current) this.current = current;
+		else if (destinations.length > 0) this.moveTo(destinations[0]);
+		return this.current;
 	}
 
-	private switchMode(id: string): void {
-		this.modeId = id;
+	private isAvailable(destination: Destination): boolean {
+		return this.destinations().some((candidate) => candidate.id === destination.id);
+	}
+
+	private moveTo(destination: Destination): void {
+		this.current = destination;
 		const kept = retainTags(this.selectedTags, this.modeTagGroups());
 		this.selectedTags.clear();
 		kept.forEach((tag) => this.selectedTags.add(tag));
-		this.options.onModeChange(id);
+		this.options.onDestinationChange(destination.id);
+	}
+
+	private modeTagGroups() {
+		return modeTagGroups(this.options.settings().tagGroups, this.destination().mode);
+	}
+
+	private switchDestination(id: string): void {
+		const destination = pickDestination(this.destinations(), id);
+		if (!destination) return;
+		this.moveTo(destination);
 		this.renderTitle();
 		this.renderControls();
 	}
@@ -245,14 +269,18 @@ export class CaptureScreen {
 	private async send(): Promise<void> {
 		const previous = this.state;
 		const tags = [...this.selectedTags];
-		const mode = this.mode();
+		const destination = this.destination();
+		if (!this.isAvailable(destination)) {
+			new Notice(NO_DESTINATIONS);
+			return;
+		}
 		this.sendingAudio = previous === "stopped";
 		this.tagPicker.close();
 		this.modePicker.close();
 		this.setState("sending");
 		try {
-			if (this.sendingAudio) await this.options.service.captureAudio(mode, await this.requirePendingRecording(), tags);
-			else await this.options.service.captureText(mode, this.textarea.value, tags);
+			if (this.sendingAudio) await this.options.service.captureAudio(destination, await this.requirePendingRecording(), tags);
+			else await this.options.service.captureText(destination, this.textarea.value, tags);
 		} catch (error) {
 			if (error instanceof TargetError) {
 				new Notice(error.message);
@@ -268,7 +296,8 @@ export class CaptureScreen {
 			this.setState(previous);
 			return;
 		}
-		new Notice(`Added to ${modeTitle(mode, "daily note")}`);
+		this.options.onCaptured(destination.id);
+		new Notice(`Added to ${destination.title}`);
 		this.resetAfterSend();
 	}
 
@@ -373,9 +402,9 @@ export class CaptureScreen {
 	}
 
 	private renderTitle(): void {
-		const switchable = this.options.settings().modes.length > 1;
+		const switchable = this.destinations().length > 1;
 		this.titleEl.empty();
-		this.titleEl.appendText(modeTitle(this.mode(), this.today));
+		this.titleEl.appendText(this.destination().title);
 		this.titleEl.toggleClass("is-switchable", switchable);
 		if (switchable) {
 			this.titleEl.appendText("\u00a0");
