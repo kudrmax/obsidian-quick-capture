@@ -1,5 +1,6 @@
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { CaptureMode, FormatOverrides, HeadingLevelChoice, ModeFile, NO_OVERRIDES, noteName } from "../domain/CaptureMode";
+import { CaptureMode, FormatOverrides, HeadingLevelChoice, listDestinations, ModeFile, NO_OVERRIDES, noteName } from "../domain/CaptureMode";
+import { moveItem } from "../domain/ListOrder";
 import { AfterSend, CaptureSettings, newId, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
 import { IconSuggest } from "./IconSuggest";
@@ -155,8 +156,16 @@ export class SettingsTab extends PluginSettingTab {
 			);
 		const target = mode.target;
 		if (target.type === "files") {
-			target.files.forEach((file, fileIndex) => this.fileSetting(box, target.files, file, fileIndex));
-			new Setting(box).setDesc("Each file shows up on the capture screen by its alias, or by its name when the alias is empty.").addButton((button) =>
+			const hint = () =>
+				listDestinations([mode], "").length === 0
+					? "Add a file to see this mode on the capture screen."
+					: "Each file shows up on the capture screen by its alias, or by its name when the alias is empty.";
+			const addFile = new Setting(box);
+			const refreshHint = () => addFile.setDesc(hint());
+			target.files.forEach((file, fileIndex) => this.fileSetting(box, target.files, file, fileIndex, refreshHint));
+			box.appendChild(addFile.settingEl);
+			refreshHint();
+			addFile.addButton((button) =>
 				button.setButtonText("Add file").onClick(async () => {
 					target.files.push(emptyFile());
 					await this.saveAndRedraw();
@@ -180,7 +189,7 @@ export class SettingsTab extends PluginSettingTab {
 		});
 	}
 
-	private fileSetting(container: HTMLElement, files: ModeFile[], file: ModeFile, index: number): void {
+	private fileSetting(container: HTMLElement, files: ModeFile[], file: ModeFile, index: number, onPathChange: () => void): void {
 		const setting = new Setting(container).setName(`File ${index + 1}`).setClass("dqc-file-setting");
 		let aliasInput: HTMLInputElement | null = null;
 		const aliasPlaceholder = () => noteName(file.path) || "Alias";
@@ -199,6 +208,7 @@ export class SettingsTab extends PluginSettingTab {
 				const savePath = async (value: string) => {
 					file.path = value;
 					aliasInput?.setAttribute("placeholder", aliasPlaceholder());
+					onPathChange();
 					await this.host.saveSettings();
 				};
 				text.setPlaceholder("Books/Book.md").setValue(file.path).onChange(savePath);
@@ -329,6 +339,26 @@ export class SettingsTab extends PluginSettingTab {
 					text.setPlaceholder("Icon (optional)").setValue(quickTag.icon).onChange(saveIcon);
 					new IconSuggest(this.app, text.inputEl, (icon) => void saveIcon(icon));
 				})
+				.addExtraButton((button) =>
+					button
+						.setIcon("chevron-up")
+						.setTooltip("Move up")
+						.setDisabled(tagIndex === 0)
+						.onClick(async () => {
+							moveItem(group.tags, tagIndex, -1);
+							await this.saveAndRedraw();
+						}),
+				)
+				.addExtraButton((button) =>
+					button
+						.setIcon("chevron-down")
+						.setTooltip("Move down")
+						.setDisabled(tagIndex === group.tags.length - 1)
+						.onClick(async () => {
+							moveItem(group.tags, tagIndex, 1);
+							await this.saveAndRedraw();
+						}),
+				)
 				.addExtraButton((button) =>
 					button
 						.setIcon("x")
