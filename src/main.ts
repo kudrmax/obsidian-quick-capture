@@ -57,7 +57,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 		};
 		const openLast = () => this.openCapture(this.settings.lastDestinationId, true);
 
-		this.addRibbonIcon("mic", "Open quick capture", openLast);
+		this.addRibbonIcon("notebook-pen", "Open quick capture", openLast);
 		this.addCommand({ id: "open", name: "Open quick capture", callback: openLast });
 		this.syncDestinationCommands();
 		this.addSettingTab(new SettingsTab(this.app, this));
