@@ -23,15 +23,15 @@ export class CaptureService {
 		this.formatter = new EntryFormatter(deps.clock);
 	}
 
-	async captureText(text: string): Promise<void> {
+	async captureText(text: string, tags: readonly string[] = []): Promise<void> {
 		const content = text.trimEnd();
 		if (content.trim() === "") throw new CaptureError("Nothing to add");
 		const settings = this.deps.settings();
 		const notePath = await this.deps.dailyNotes.getOrCreateToday();
-		await this.append(notePath, settings, { prefix: settings.textPrefix, suffix: settings.textSuffix }, content);
+		await this.append(notePath, settings, { prefix: settings.textPrefix, suffix: settings.textSuffix }, content, tags);
 	}
 
-	async captureAudio(recording: AudioRecording): Promise<void> {
+	async captureAudio(recording: AudioRecording, tags: readonly string[] = []): Promise<void> {
 		if (recording.data.byteLength === 0 || recording.durationMs < MIN_RECORDING_MS) {
 			throw new CaptureError("Recording is empty");
 		}
@@ -40,15 +40,21 @@ export class CaptureService {
 		const saved = await this.deps.attachments.save(this.recordingFileName(recording.extension), recording.data, notePath);
 		const content = `${settings.embedAudio ? "!" : ""}${saved.link}`;
 		try {
-			await this.append(notePath, settings, { prefix: settings.audioPrefix, suffix: settings.audioSuffix }, content);
+			await this.append(notePath, settings, { prefix: settings.audioPrefix, suffix: settings.audioSuffix }, content, tags);
 		} catch (error) {
 			await this.deps.attachments.discard(saved.path);
 			throw error;
 		}
 	}
 
-	private async append(notePath: string, settings: CaptureSettings, template: EntryTemplate, content: string): Promise<void> {
-		const entry = this.formatter.format(template, content);
+	private async append(
+		notePath: string,
+		settings: CaptureSettings,
+		template: EntryTemplate,
+		content: string,
+		tags: readonly string[],
+	): Promise<void> {
+		const entry = this.formatter.format(template, content, tags);
 		await this.deps.notes.update(notePath, (note) => insertIntoSection(note, settings.heading, entry));
 	}
 

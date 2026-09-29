@@ -1,5 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { AfterSend, CaptureSettings } from "../settings";
+import { AfterSend, CaptureSettings, TagGroup } from "../settings";
+import { IconSuggest } from "./IconSuggest";
+import { renderTagLabel } from "./TagIcon";
 
 export interface SettingsHost extends Plugin {
 	settings: CaptureSettings;
@@ -50,6 +52,94 @@ export class SettingsTab extends PluginSettingTab {
 						await this.host.saveSettings();
 					}),
 			);
+
+		this.tagGroupSettings();
+	}
+
+	private tagGroupSettings(): void {
+		new Setting(this.containerEl)
+			.setName("Quick tags")
+			.setDesc("Tags you can add to an entry with the # button. They go right before the suffix. A tag with an icon shows the icon on the button and writes the tag.")
+			.setHeading();
+		this.host.settings.tagGroups.forEach((group, index) => this.tagGroupSetting(group, index));
+		new Setting(this.containerEl).addButton((button) =>
+			button.setButtonText("Add group").onClick(async () => {
+				this.host.settings.tagGroups.push({ name: "", tags: [{ tag: "", icon: "" }] });
+				await this.saveAndRedraw();
+			}),
+		);
+	}
+
+	private tagGroupSetting(group: TagGroup, index: number): void {
+		new Setting(this.containerEl)
+			.setName(`Group ${index + 1}`)
+			.setClass("dqc-tag-group-setting")
+			.addText((text) =>
+				text
+					.setPlaceholder("Name, e.g. Books")
+					.setValue(group.name)
+					.onChange(async (value) => {
+						group.name = value;
+						await this.host.saveSettings();
+					}),
+			)
+			.addExtraButton((button) =>
+				button
+					.setIcon("trash-2")
+					.setTooltip("Delete group")
+					.onClick(async () => {
+						this.host.settings.tagGroups.splice(index, 1);
+						await this.saveAndRedraw();
+					}),
+			);
+
+		group.tags.forEach((quickTag, tagIndex) => {
+			const setting = new Setting(this.containerEl);
+			const preview = setting.nameEl.createSpan({ cls: "dqc-tag-row-preview" });
+			const updatePreview = () => renderTagLabel(preview, quickTag.tag, quickTag.icon);
+			updatePreview();
+			setting
+				.addText((text) =>
+					text
+						.setPlaceholder("#tag")
+						.setValue(quickTag.tag)
+						.onChange(async (value) => {
+							quickTag.tag = value;
+							updatePreview();
+							await this.host.saveSettings();
+						}),
+				)
+				.addText((text) => {
+					const saveIcon = async (value: string) => {
+						quickTag.icon = value.trim();
+						updatePreview();
+						await this.host.saveSettings();
+					};
+					text.setPlaceholder("Icon (optional)").setValue(quickTag.icon).onChange(saveIcon);
+					new IconSuggest(this.app, text.inputEl, (icon) => void saveIcon(icon));
+				})
+				.addExtraButton((button) =>
+					button
+						.setIcon("x")
+						.setTooltip("Remove tag")
+						.onClick(async () => {
+							group.tags.splice(tagIndex, 1);
+							await this.saveAndRedraw();
+						}),
+				);
+		});
+
+		new Setting(this.containerEl).addButton((button) =>
+			button.setButtonText("Add tag").onClick(async () => {
+				group.tags.push({ tag: "", icon: "" });
+				await this.saveAndRedraw();
+			}),
+		);
+	}
+
+	private async saveAndRedraw(): Promise<void> {
+		await this.host.saveSettings();
+		this.display();
 	}
 
 	private textSetting(name: string, description: string, key: TextSettingKey, placeholder = ""): void {

@@ -107,4 +107,16 @@ describe("CaptureService", () => {
 		await service.captureText("second");
 		expect(notes.files.get(NOTE)).toBe("### Дневник\n- 21:37 first\n- 21:37 second");
 	});
+
+	it("adds selected tags to a text entry before the suffix", async () => {
+		const { notes, service } = setup({ textSuffix: " #inbox" });
+		await service.captureText("milk", ["#analyze/нравится"]);
+		expect(notes.files.get(NOTE)).toBe("- 21:37 milk #analyze/нравится #inbox");
+	});
+
+	it("adds selected tags to an audio entry before the suffix", async () => {
+		const { notes, service } = setup({ audioSuffix: " #transcribe" });
+		await service.captureAudio(audio, ["#idea", "#book"]);
+		expect(notes.files.get(NOTE)).toBe("- 21:37 ![[Recording 20260929213705.m4a]] #idea #book #transcribe");
+	});
 });

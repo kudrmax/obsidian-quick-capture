@@ -4,6 +4,7 @@ import { AudioRecording } from "../application/ports";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
+import { hasQuickTags, TagPicker } from "./TagPicker";
 import { Waveform } from "./Waveform";
 
 export interface CaptureScreenOptions {
@@ -38,10 +39,13 @@ export class CaptureScreen {
 	private readonly statusEl: HTMLElement;
 	private readonly timerEl: HTMLElement;
 	private readonly closeSlot: HTMLElement;
+	private readonly tagSlot: HTMLElement;
 	private readonly leftSlot: HTMLElement;
 	private readonly centerSlot: HTMLElement;
 	private readonly confirmEl: HTMLElement;
 	private readonly waveform: Waveform;
+	private readonly selectedTags = new Set<string>();
+	private readonly tagPicker: TagPicker;
 	private readonly footerObserver: ResizeObserver;
 
 	private recorder: AudioRecorder | null = null;
@@ -83,14 +87,18 @@ export class CaptureScreen {
 
 		const footer = this.root.createDiv({ cls: "dqc-footer" });
 		const controls = footer.createDiv({ cls: "dqc-controls" });
-		this.closeSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
+		this.tagSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.leftSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.centerSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-center" });
+		this.closeSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.footerObserver = new ResizeObserver(() =>
 			this.root.style.setProperty("--dqc-footer-height", `${footer.offsetHeight}px`),
 		);
 		this.footerObserver.observe(footer);
 
+		this.tagPicker = new TagPicker(this.root, () => this.options.settings().tagGroups, this.selectedTags, () =>
+			this.renderControls(),
+		);
 		this.confirmEl = this.root.createDiv({ cls: "dqc-confirm" });
 		this.render();
 	}
@@ -110,7 +118,8 @@ export class CaptureScreen {
 
 	requestClose(): void {
 		if (this.state === "sending") return;
-		if (this.hasUnsentAudio()) this.showConfirm();
+		if (this.tagPicker.isOpen()) this.tagPicker.close();
+		else if (this.hasUnsentAudio()) this.showConfirm();
 		else this.options.onClose();
 	}
 
@@ -198,11 +207,13 @@ export class CaptureScreen {
 
 	private async send(): Promise<void> {
 		const previous = this.state;
+		const tags = [...this.selectedTags];
 		this.sendingAudio = previous === "stopped";
+		this.tagPicker.close();
 		this.setState("sending");
 		try {
-			if (this.sendingAudio) await this.options.service.captureAudio(await this.requirePendingRecording());
-			else await this.options.service.captureText(this.textarea.value);
+			if (this.sendingAudio) await this.options.service.captureAudio(await this.requirePendingRecording(), tags);
+			else await this.options.service.captureText(this.textarea.value, tags);
 		} catch (error) {
 			if (this.sendingAudio && error instanceof CaptureError) {
 				new Notice(error.message);
@@ -224,6 +235,7 @@ export class CaptureScreen {
 
 	private resetAfterSend(): void {
 		this.pendingRecording = null;
+		this.selectedTags.clear();
 		this.textarea.value = "";
 		this.stoppedElapsedMs = 0;
 		this.waveform.clear();
@@ -331,8 +343,33 @@ export class CaptureScreen {
 			onClick: () => this.requestClose(),
 			disabled: this.state === "sending",
 		});
+		this.renderTagControl();
 		this.renderControl(this.leftSlot, left);
 		this.renderControl(this.centerSlot, center);
+	}
+
+	private renderTagControl(): void {
+		if (!hasQuickTags(this.options.settings().tagGroups)) {
+			this.renderControl(this.tagSlot, null);
+			return;
+		}
+		const count = this.selectedTags.size;
+		this.renderControl(this.tagSlot, {
+			icon: this.tagPicker.isOpen() ? "chevron-down" : "hash",
+			label: count > 0 ? `Tags (${count})` : "Tags",
+			tone: "secondary",
+			onClick: () => this.toggleTagPicker(),
+			disabled: this.state === "sending",
+		});
+		const button = this.tagSlot.querySelector("button");
+		if (!button) return;
+		if (count > 0) button.dataset.count = String(count);
+		else delete button.dataset.count;
+	}
+
+	private toggleTagPicker(): void {
+		this.tagPicker.toggle();
+		if (this.tagPicker.isOpen()) this.textarea.blur();
 	}
 
 	private controlsForState(): [ControlSpec | null, ControlSpec] {
