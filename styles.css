@@ -386,3 +386,122 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 	background: var(--color-red);
 	color: #fff;
 }
+
+.dqc-screen button.dqc-control[data-count] {
+	position: relative;
+	overflow: visible;
+}
+
+.dqc-screen button.dqc-control[data-count]::after {
+	content: attr(data-count);
+	position: absolute;
+	top: 0;
+	right: 0;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 5px;
+	box-sizing: border-box;
+	border-radius: 10px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 12px;
+	font-weight: var(--font-semibold);
+	line-height: 20px;
+	text-align: center;
+}
+
+.dqc-tags {
+	position: absolute;
+	inset: 0;
+	display: none;
+	align-items: flex-end;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.45);
+	z-index: 10;
+}
+
+.dqc-tags.is-open {
+	display: flex;
+}
+
+.dqc-tags-sheet {
+	width: 100%;
+	max-width: 480px;
+	max-height: 70%;
+	overflow-y: auto;
+	box-sizing: border-box;
+	margin: 12px;
+	margin-bottom: max(12px, env(safe-area-inset-bottom));
+	padding: 20px;
+	border-radius: 20px;
+	background: var(--background-primary);
+}
+
+.dqc-tags-group + .dqc-tags-group {
+	margin-top: 18px;
+}
+
+.dqc-tags-group-name {
+	margin-bottom: 10px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.dqc-tags-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.dqc-screen button.dqc-tag-chip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 48px;
+	height: 44px;
+	padding: 0 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 22px;
+	corner-shape: round;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.dqc-screen button.dqc-tag-chip svg {
+	width: 20px;
+	height: 20px;
+}
+
+.dqc-screen button.dqc-tag-chip.is-selected {
+	border-color: transparent;
+	background: var(--tag-background);
+	color: var(--tag-color);
+}
+
+.dqc-icon-suggestion {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.dqc-icon-suggestion-icon {
+	display: flex;
+}
+
+.dqc-tag-row-preview {
+	display: inline-flex;
+	align-items: center;
+	min-width: 24px;
+	color: var(--tag-color);
+}
+
+.dqc-tag-row-preview svg {
+	width: 18px;
+	height: 18px;
+}
