@@ -33,6 +33,7 @@ export class TagPicker {
 
 	private render(): void {
 		this.sheetEl.empty();
+		this.sheetEl.createDiv({ cls: "dqc-tags-grabber" });
 		for (const group of this.groups()) {
 			const tags = group.tags.filter((quickTag) => quickTag.tag.trim() !== "");
 			if (tags.length === 0) continue;
@@ -42,7 +43,7 @@ export class TagPicker {
 			for (const quickTag of tags) {
 				const tag = quickTag.tag.trim();
 				const chip = chips.createEl("button", { cls: "dqc-tag-chip", attr: { "aria-label": tag, title: tag } });
-				renderTagLabel(chip, tag, quickTag.icon);
+				chip.toggleClass("is-icon", renderTagLabel(chip, tag, quickTag.icon));
 				chip.toggleClass("is-selected", this.selected.has(tag));
 				chip.onclick = () => {
 					if (this.selected.has(tag)) this.selected.delete(tag);
