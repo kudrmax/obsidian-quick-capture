@@ -1,5 +1,6 @@
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { CaptureMode, FormatOverrides, HeadingLevelChoice, ModeFile, NO_OVERRIDES, noteName } from "../domain/CaptureMode";
+import { moveItem } from "../domain/ListOrder";
 import { AfterSend, CaptureSettings, newId, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
 import { IconSuggest } from "./IconSuggest";
@@ -329,6 +330,26 @@ export class SettingsTab extends PluginSettingTab {
 					text.setPlaceholder("Icon (optional)").setValue(quickTag.icon).onChange(saveIcon);
 					new IconSuggest(this.app, text.inputEl, (icon) => void saveIcon(icon));
 				})
+				.addExtraButton((button) =>
+					button
+						.setIcon("chevron-up")
+						.setTooltip("Move up")
+						.setDisabled(tagIndex === 0)
+						.onClick(async () => {
+							moveItem(group.tags, tagIndex, -1);
+							await this.saveAndRedraw();
+						}),
+				)
+				.addExtraButton((button) =>
+					button
+						.setIcon("chevron-down")
+						.setTooltip("Move down")
+						.setDisabled(tagIndex === group.tags.length - 1)
+						.onClick(async () => {
+							moveItem(group.tags, tagIndex, 1);
+							await this.saveAndRedraw();
+						}),
+				)
 				.addExtraButton((button) =>
 					button
 						.setIcon("x")
