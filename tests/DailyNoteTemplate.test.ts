@@ -24,6 +24,10 @@ describe("dailyNotePath", () => {
 describe("renderDailyTemplate", () => {
 	it("replaces core daily note tokens", () => {
 		const template = "# {{title}}\n{{date}} {{time}} {{ DATE:YYYY }} {{time:HH}}";
-		expect(renderDailyTemplate(template, "2026-09-29", date, fmt)).toBe("# 2026-09-29\n2026-09-29 07:04 2026 07");
+		expect(renderDailyTemplate(template, "2026-09-29", date, fmt, "YYYY-MM-DD")).toBe("# 2026-09-29\n2026-09-29 07:04 2026 07");
+	});
+
+	it("formats a bare {{date}} with the daily note format", () => {
+		expect(renderDailyTemplate("{{date}}", "29.09.2026", date, fmt, "DD.MM.YYYY")).toBe("29.09.2026");
 	});
 });

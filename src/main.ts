@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
 import { systemClock } from "./domain/Clock";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
@@ -15,7 +15,7 @@ export default class DailyQuickCapturePlugin extends Plugin implements SettingsH
 	override async onload(): Promise<void> {
 		this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
 
-		const dailyNotes = new ObsidianDailyNotes(this.app);
+		const dailyNotes = new ObsidianDailyNotes(this.app, systemClock, (message) => new Notice(message));
 		const service = new CaptureService({
 			dailyNotes,
 			notes: new ObsidianNoteWriter(this.app),

@@ -1,5 +1,6 @@
 import { App, moment, normalizePath, TFile } from "obsidian";
 import { DailyNoteGateway } from "../application/ports";
+import { Clock } from "../domain/Clock";
 import { dailyNotePath, renderDailyTemplate } from "../domain/DailyNoteTemplate";
 
 interface DailyNotesOptions {
@@ -18,24 +19,31 @@ const createMoment = moment as unknown as MomentFactory;
 const formatDate = (date: Date, format: string) => createMoment(date).format(format);
 
 export class ObsidianDailyNotes implements DailyNoteGateway {
-	constructor(private readonly app: App) {}
+	constructor(
+		private readonly app: App,
+		private readonly clock: Clock,
+		private readonly warn: (message: string) => void,
+	) {}
 
 	todayPath(): string {
-		const options = this.options();
-		return normalizePath(dailyNotePath(options.folder ?? "", options.format ?? "", new Date(), formatDate));
+		return this.pathFor(this.options(), this.clock.now());
 	}
 
 	async getOrCreateToday(): Promise<string> {
 		const options = this.options();
-		const now = new Date();
-		const path = normalizePath(dailyNotePath(options.folder ?? "", options.format ?? "", now, formatDate));
+		const now = this.clock.now();
+		const path = this.pathFor(options, now);
 		if (this.app.vault.getFileByPath(path)) return path;
 
 		await this.ensureParentFolder(path);
 		const title = path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/, "");
 		const template = await this.readTemplate(options.template ?? "");
-		await this.app.vault.create(path, renderDailyTemplate(template, title, now, formatDate));
+		await this.app.vault.create(path, renderDailyTemplate(template, title, now, formatDate, options.format ?? ""));
 		return path;
+	}
+
+	private pathFor(options: DailyNotesOptions, date: Date): string {
+		return normalizePath(dailyNotePath(options.folder ?? "", options.format ?? "", date, formatDate));
 	}
 
 	private options(): DailyNotesOptions {
@@ -56,7 +64,10 @@ export class ObsidianDailyNotes implements DailyNoteGateway {
 		const linkpath = templatePath.trim();
 		if (!linkpath) return "";
 		const file = this.app.metadataCache.getFirstLinkpathDest(linkpath, "");
-		if (!(file instanceof TFile)) return "";
+		if (!(file instanceof TFile)) {
+			this.warn(`Daily note template not found: ${linkpath}`);
+			return "";
+		}
 		return this.app.vault.cachedRead(file);
 	}
 }
