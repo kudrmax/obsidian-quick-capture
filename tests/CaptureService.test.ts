@@ -105,7 +105,7 @@ describe("CaptureService", () => {
 		const { notes, service } = setup({ heading: "### Дневник" });
 		await service.captureText("first");
 		await service.captureText("second");
-		expect(notes.files.get(NOTE)).toBe("### Дневник\n- 21:37 first\n- 21:37 second");
+		expect(notes.files.get(NOTE)).toBe("### Дневник\n\n- 21:37 first\n- 21:37 second");
 	});
 
 	it("adds selected tags to a text entry before the suffix", async () => {
