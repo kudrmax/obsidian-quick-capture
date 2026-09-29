@@ -19,4 +19,5 @@ export interface AttachmentStore {
 export interface AudioRecording {
 	data: ArrayBuffer;
 	extension: string;
+	durationMs: number;
 }

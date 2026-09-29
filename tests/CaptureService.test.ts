@@ -49,7 +49,7 @@ function setup(overrides: Partial<CaptureSettings> = {}) {
 	return { notes, attachments, service };
 }
 
-const audio = { data: new Uint8Array([1, 2]).buffer, extension: "m4a" };
+const audio = { data: new Uint8Array([1, 2]).buffer, extension: "m4a", durationMs: 4000 };
 
 describe("CaptureService", () => {
 	it("appends formatted text to today's note", async () => {
@@ -78,7 +78,7 @@ describe("CaptureService", () => {
 
 	it("rejects an empty recording without touching files", async () => {
 		const { attachments, service } = setup();
-		await expect(service.captureAudio({ data: new ArrayBuffer(0), extension: "m4a" })).rejects.toThrow("Recording is empty");
+		await expect(service.captureAudio({ data: new ArrayBuffer(0), extension: "m4a", durationMs: 4000 })).rejects.toThrow("Recording is empty");
 		expect(attachments.saved).toEqual([]);
 	});
 
@@ -87,5 +87,17 @@ describe("CaptureService", () => {
 		notes.failWrites = true;
 		await expect(service.captureAudio(audio)).rejects.toThrow("disk full");
 		expect(attachments.discarded).toEqual(["Files/Recording 20260929213705.m4a"]);
+	});
+
+	it("treats a recording shorter than half a second as empty", async () => {
+		const { attachments, service } = setup();
+		await expect(service.captureAudio({ ...audio, durationMs: 200 })).rejects.toThrow("Recording is empty");
+		expect(attachments.saved).toEqual([]);
+	});
+
+	it("drops trailing line breaks and spaces from text", async () => {
+		const { notes, service } = setup();
+		await service.captureText("milk\n\n  ");
+		expect(notes.files.get(NOTE)).toBe("- 21:37 milk");
 	});
 });

@@ -1,5 +1,5 @@
 import { Notice, setIcon } from "obsidian";
-import { CaptureService } from "../application/CaptureService";
+import { CaptureError, CaptureService } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import { CaptureSettings } from "../settings";
@@ -43,6 +43,8 @@ export class CaptureScreen {
 	private recorder: AudioRecorder | null = null;
 	private pendingRecording: Promise<AudioRecording> | null = null;
 	private sendingAudio = false;
+	private startingRecording = false;
+	private destroyed = false;
 	private sampleTimer: number | null = null;
 	private elapsedMs = 0;
 	private segmentStartedAt = 0;
@@ -102,6 +104,7 @@ export class CaptureScreen {
 	}
 
 	destroy(): void {
+		this.destroyed = true;
 		this.footerObserver.disconnect();
 		this.releaseRecorder();
 	}
@@ -115,12 +118,21 @@ export class CaptureScreen {
 	}
 
 	private async startRecording(): Promise<void> {
+		if (this.startingRecording) return;
+		this.startingRecording = true;
+		this.renderControls();
 		const recorder = this.options.createRecorder();
 		try {
 			await recorder.start();
 		} catch (error) {
 			recorder.cancel();
-			new Notice(`Microphone is not available: ${errorMessage(error)}`);
+			if (!this.destroyed) new Notice(`Microphone is not available: ${errorMessage(error)}`);
+			return;
+		} finally {
+			this.startingRecording = false;
+		}
+		if (this.destroyed || this.state !== "input") {
+			recorder.cancel();
 			return;
 		}
 		this.recorder = recorder;
@@ -174,6 +186,11 @@ export class CaptureScreen {
 			if (this.sendingAudio) await this.options.service.captureAudio(await this.requirePendingRecording());
 			else await this.options.service.captureText(this.textarea.value);
 		} catch (error) {
+			if (this.sendingAudio && error instanceof CaptureError) {
+				new Notice(error.message);
+				this.discard();
+				return;
+			}
 			new Notice(`Could not add to daily note: ${errorMessage(error)}`);
 			this.setState(previous);
 			return;
@@ -291,7 +308,16 @@ export class CaptureScreen {
 			case "input":
 				return this.textarea.value.trim().length > 0
 					? [null, { icon: "arrow-up", label: "Send", tone: "primary", onClick: () => void this.send() }]
-					: [null, { icon: "mic", label: "Record", tone: "primary", onClick: () => void this.startRecording() }];
+					: [
+							null,
+							{
+								icon: "mic",
+								label: "Record",
+								tone: "primary",
+								onClick: () => void this.startRecording(),
+								disabled: this.startingRecording,
+							},
+						];
 			case "recording":
 				return [
 					{ icon: "pause", label: "Pause", tone: "secondary", onClick: () => this.pause() },

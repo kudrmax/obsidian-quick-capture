@@ -121,8 +121,10 @@
 ## 7. Аудио
 
 - Запись через `MediaRecorder` на потоке `getUserMedia({ audio: true })`.
-  Формат: первый поддерживаемый из `audio/webm;codecs=opus` (`.webm`), `audio/mp4` (`.m4a`),
-  `audio/ogg` (`.ogg`). На iOS это `.m4a`.
+  Формат: первый поддерживаемый из `audio/mp4` (`.m4a`), `audio/webm;codecs=opus` (`.webm`),
+  `audio/ogg` (`.ogg`). На iOS и десктопе это `.m4a`.
+- Запись короче 0,5 с считается пустой: ничего не сохраняется, `Notice`: `Recording is empty`,
+  экран возвращается во ввод.
 - Пауза и продолжение — `MediaRecorder.pause()` / `resume()`.
 - Уровень для волны — `AnalyserNode` на том же потоке.
 - Имя файла: `Recording YYYYMMDDHHmmss.<ext>` (как у встроенного рекордера).

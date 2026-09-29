@@ -11,7 +11,7 @@ export function insertIntoSection(note: string, heading: string, entry: string):
 	const separator = note.includes("\r\n") ? "\r\n" : "\n";
 	const lines = note.split(/\r?\n/);
 	const entryLines = entry.split(/\r?\n/);
-	const target = heading.trim().toLowerCase();
+	const target = heading.replace(/^\s*#+/, "").trim().toLowerCase();
 	const headings = findHeadings(lines);
 	const match = target === "" ? undefined : headings.find((h) => h.text.trim().toLowerCase() === target);
 

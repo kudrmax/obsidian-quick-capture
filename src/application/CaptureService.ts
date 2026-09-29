@@ -6,6 +6,8 @@ import { AttachmentStore, AudioRecording, DailyNoteGateway, NoteWriter } from ".
 
 export class CaptureError extends Error {}
 
+const MIN_RECORDING_MS = 500;
+
 interface CaptureDependencies {
 	dailyNotes: DailyNoteGateway;
 	notes: NoteWriter;
@@ -22,14 +24,17 @@ export class CaptureService {
 	}
 
 	async captureText(text: string): Promise<void> {
-		if (text.trim() === "") throw new CaptureError("Nothing to add");
+		const content = text.trimEnd();
+		if (content.trim() === "") throw new CaptureError("Nothing to add");
 		const settings = this.deps.settings();
 		const notePath = await this.deps.dailyNotes.getOrCreateToday();
-		await this.append(notePath, settings, { prefix: settings.textPrefix, suffix: settings.textSuffix }, text);
+		await this.append(notePath, settings, { prefix: settings.textPrefix, suffix: settings.textSuffix }, content);
 	}
 
 	async captureAudio(recording: AudioRecording): Promise<void> {
-		if (recording.data.byteLength === 0) throw new CaptureError("Recording is empty");
+		if (recording.data.byteLength === 0 || recording.durationMs < MIN_RECORDING_MS) {
+			throw new CaptureError("Recording is empty");
+		}
 		const settings = this.deps.settings();
 		const notePath = await this.deps.dailyNotes.getOrCreateToday();
 		const saved = await this.deps.attachments.save(this.recordingFileName(recording.extension), recording.data, notePath);

@@ -17,10 +17,16 @@ interface LinkSuggestion {
 
 type Suggestion = TagSuggestion | LinkSuggestion;
 
+interface LinkTarget {
+	file: TFile;
+	aliases: string[];
+}
+
 const SUGGESTION_LIMIT = 20;
 
 export class CaptureSuggest extends AbstractInputSuggest<Suggestion> {
 	private tagCounts: Map<string, number> | null = null;
+	private linkTargets: LinkTarget[] | null = null;
 
 	constructor(
 		app: App,
@@ -82,17 +88,24 @@ export class CaptureSuggest extends AbstractInputSuggest<Suggestion> {
 	private linkSuggestions(query: string): Suggestion[] {
 		const match = prepareFuzzySearch(query);
 		const result: LinkSuggestion[] = [];
-		for (const file of this.app.vault.getMarkdownFiles()) {
+		for (const { file, aliases } of this.collectLinkTargets()) {
 			const nameScore = query ? match(file.basename)?.score : 0;
 			if (nameScore !== undefined) result.push({ kind: "link", file, alias: null, score: nameScore });
 			if (!query) continue;
-			const aliases = parseFrontMatterAliases(this.app.metadataCache.getFileCache(file)?.frontmatter) ?? [];
 			for (const alias of aliases) {
 				const aliasScore = match(alias)?.score;
 				if (aliasScore !== undefined) result.push({ kind: "link", file, alias, score: aliasScore });
 			}
 		}
 		return result.sort((a, b) => b.score - a.score || b.file.stat.mtime - a.file.stat.mtime);
+	}
+
+	private collectLinkTargets(): LinkTarget[] {
+		this.linkTargets ??= this.app.vault.getMarkdownFiles().map((file) => ({
+			file,
+			aliases: parseFrontMatterAliases(this.app.metadataCache.getFileCache(file)?.frontmatter) ?? [],
+		}));
+		return this.linkTargets;
 	}
 
 	private collectTags(): Map<string, number> {

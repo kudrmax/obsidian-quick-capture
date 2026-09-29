@@ -15,8 +15,8 @@ interface AudioFormat {
 }
 
 const PREFERRED_FORMATS: AudioFormat[] = [
-	{ mimeType: "audio/webm;codecs=opus", extension: "webm" },
 	{ mimeType: "audio/mp4", extension: "m4a" },
+	{ mimeType: "audio/webm;codecs=opus", extension: "webm" },
 	{ mimeType: "audio/ogg;codecs=opus", extension: "ogg" },
 ];
 
@@ -30,6 +30,8 @@ export class MediaAudioRecorder implements AudioRecorder {
 	private readonly samples = new Float32Array(1024);
 	private chunks: Blob[] = [];
 	private extension = "webm";
+	private recordedMs = 0;
+	private segmentStartedAt: number | null = null;
 
 	async start(): Promise<void> {
 		if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -45,19 +47,27 @@ export class MediaAudioRecorder implements AudioRecorder {
 		});
 		this.startLevelMeter(this.stream);
 		this.recorder.start(CHUNK_INTERVAL_MS);
+		this.recordedMs = 0;
+		this.segmentStartedAt = performance.now();
 	}
 
 	pause(): void {
-		if (this.recorder?.state === "recording") this.recorder.pause();
+		if (this.recorder?.state !== "recording") return;
+		this.recorder.pause();
+		this.closeSegment();
 	}
 
 	resume(): void {
-		if (this.recorder?.state === "paused") this.recorder.resume();
+		if (this.recorder?.state !== "paused") return;
+		this.recorder.resume();
+		this.segmentStartedAt = performance.now();
 	}
 
 	stop(): Promise<AudioRecording> {
 		const recorder = this.recorder;
 		if (!recorder) return Promise.reject(new Error("recording has not started"));
+		this.closeSegment();
+		const durationMs = this.recordedMs;
 		return new Promise((resolve, reject) => {
 			recorder.addEventListener(
 				"stop",
@@ -65,7 +75,7 @@ export class MediaAudioRecorder implements AudioRecorder {
 					const blob = new Blob(this.chunks, { type: recorder.mimeType });
 					const extension = this.extension;
 					this.release();
-					blob.arrayBuffer().then((data) => resolve({ data, extension }), reject);
+					blob.arrayBuffer().then((data) => resolve({ data, extension, durationMs }), reject);
 				},
 				{ once: true },
 			);
@@ -92,6 +102,13 @@ export class MediaAudioRecorder implements AudioRecorder {
 		this.analyser = this.context.createAnalyser();
 		this.analyser.fftSize = this.samples.length;
 		this.context.createMediaStreamSource(stream).connect(this.analyser);
+		void this.context.resume();
+	}
+
+	private closeSegment(): void {
+		if (this.segmentStartedAt === null) return;
+		this.recordedMs += performance.now() - this.segmentStartedAt;
+		this.segmentStartedAt = null;
 	}
 
 	private release(): void {

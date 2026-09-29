@@ -49,4 +49,8 @@ describe("insertIntoSection", () => {
 	it("inserts multiline entries and replacement patterns literally", () => {
 		expect(insertIntoSection("## Journal\n", "Journal", "- $& x\ny")).toBe("## Journal\n- $& x\ny\n");
 	});
+
+	it("accepts a heading setting written with leading hashes", () => {
+		expect(insertIntoSection("## Journal\n- a\n## T\n", "## Journal", "- b")).toBe("## Journal\n- a\n- b\n## T\n");
+	});
 });
