@@ -20,6 +20,11 @@ const formatDate = (date: Date, format: string) => createMoment(date).format(for
 export class ObsidianDailyNotes implements DailyNoteGateway {
 	constructor(private readonly app: App) {}
 
+	todayPath(): string {
+		const options = this.options();
+		return normalizePath(dailyNotePath(options.folder ?? "", options.format ?? "", new Date(), formatDate));
+	}
+
 	async getOrCreateToday(): Promise<string> {
 		const options = this.options();
 		const now = new Date();
