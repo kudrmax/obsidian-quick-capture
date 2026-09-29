@@ -18,7 +18,7 @@ interface TextFormatField {
 	description: string;
 }
 
-const TIME_HINT = "{{time}} becomes the current time, e.g. 23:35. Spaces at the edges are kept.";
+const TIME_HINT = "{{time}} becomes the current time, e.g. 23:35, and {{date}} the current date, e.g. 2026-09-30. Spaces at the edges are kept.";
 const LEVELS = [1, 2, 3, 4, 5, 6];
 
 const FORMAT_FIELDS: TextFormatField[] = [

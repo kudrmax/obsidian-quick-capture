@@ -13,8 +13,17 @@ describe("EntryFormatter", () => {
 		expect(formatter.format({ prefix: "- {{time}} ", suffix: " ({{time}})" }, "x")).toBe("- 23:05 x (23:05)");
 	});
 
+	it("replaces every {{date}} with the zero-padded yyyy-mm-dd date", () => {
+		const earlyClock = { now: () => new Date(2026, 0, 5, 7, 3) };
+		expect(new EntryFormatter(earlyClock).format({ prefix: "- {{date}} {{time}} ", suffix: " [[{{date}}]]" }, "x")).toBe(
+			"- 2026-01-05 07:03 x [[2026-01-05]]",
+		);
+	});
+
 	it("keeps other placeholders and replacement patterns literally", () => {
-		expect(formatter.format({ prefix: "{{date}} ", suffix: "" }, "cost $& and $1")).toBe("{{date}} cost $& and $1");
+		expect(formatter.format({ prefix: "{{title}} ", suffix: "" }, "cost $& and $1 {{date}}")).toBe(
+			"{{title}} cost $& and $1 {{date}}",
+		);
 	});
 
 	it("keeps multiline content as is", () => {
