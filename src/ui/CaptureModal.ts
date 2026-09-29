@@ -36,7 +36,7 @@ export class CaptureModal extends Modal {
 			initial: this.deps.destination,
 			onDestinationChange: this.deps.onDestinationChange,
 			onCaptured: this.deps.onCaptured,
-			autoFocus: !Platform.isMobile,
+			autoFocus: !Platform.isMobile || this.deps.settings().openKeyboardOnMobile,
 			decorateTextInput: (textarea, destination) =>
 				new CaptureSuggest(this.app, textarea, () => this.deps.linkSourcePath(destination())),
 			onClose: () => {
@@ -51,6 +51,7 @@ export class CaptureModal extends Modal {
 		});
 		window.addEventListener("keyboardWillShow", this.onKeyboardShow);
 		window.addEventListener("keyboardWillHide", this.onKeyboardHide);
+		this.screen.focus();
 		window.setTimeout(() => this.screen?.focus(), 50);
 	}
 

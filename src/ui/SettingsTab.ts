@@ -91,6 +91,15 @@ export class SettingsTab extends PluginSettingTab {
 						await this.host.saveSettings();
 					}),
 			);
+		new Setting(containerEl)
+			.setName("Open keyboard on iPhone and iPad")
+			.setDesc("Put the cursor in the text field when the capture screen opens, so the keyboard shows right away. Turn off to start with voice more often.")
+			.addToggle((toggle) =>
+				toggle.setValue(this.settings.openKeyboardOnMobile).onChange(async (value) => {
+					this.settings.openKeyboardOnMobile = value;
+					await this.host.saveSettings();
+				}),
+			);
 	}
 
 	private modeSettings(): void {

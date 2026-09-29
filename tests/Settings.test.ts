@@ -96,7 +96,14 @@ describe("loadSettings", () => {
 		expect(settings).not.toHaveProperty("lastModeId");
 	});
 
-	it("never shares lists between loads", () => {
+	it("opens the keyboard on mobile unless turned off", () => {
+		expect(loadSettings(null).openKeyboardOnMobile).toBe(true);
+		const { openKeyboardOnMobile: _, ...saved } = loadSettings(LEGACY);
+		expect(loadSettings(JSON.parse(JSON.stringify(saved))).openKeyboardOnMobile).toBe(true);
+		expect(loadSettings({ ...saved, openKeyboardOnMobile: false }).openKeyboardOnMobile).toBe(false);
+	});
+
+		it("never shares lists between loads", () => {
 		const first = loadSettings(undefined);
 		first.tagGroups.push({ id: "x", name: "Books", tags: [] });
 		first.modes[0].tagGroupIds.push("x");
