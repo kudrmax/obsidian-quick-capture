@@ -29,7 +29,7 @@ describe("loadSettings", () => {
 		expect(settings.modes).toEqual([
 			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: [] },
 		]);
-		expect(settings.lastModeId).toBe("daily");
+		expect(settings.lastDestinationId).toBe("daily");
 	});
 
 	it("moves legacy settings into defaults and a daily mode with every tag group", () => {
@@ -48,7 +48,7 @@ describe("loadSettings", () => {
 		expect(settings.modes).toEqual([
 			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: ["group-1"] },
 		]);
-		expect(settings.lastModeId).toBe("daily");
+		expect(settings.lastDestinationId).toBe("daily");
 		expect(settings).not.toHaveProperty("heading");
 	});
 
@@ -64,9 +64,36 @@ describe("loadSettings", () => {
 
 	it("keeps settings saved in the current format", () => {
 		const saved = loadSettings(LEGACY);
-		saved.modes.push({ id: "book", title: "Book", target: { type: "file", path: "B.md" }, overrides: NO_OVERRIDES, tagGroupIds: [] });
-		saved.lastModeId = "book";
+		saved.modes.push({
+			id: "books",
+			title: "Книги",
+			target: { type: "files", files: [{ id: "b", alias: "Book", path: "B.md", lastUsedAt: 7 }] },
+			overrides: NO_OVERRIDES,
+			tagGroupIds: [],
+		});
+		saved.lastDestinationId = "b";
 		expect(loadSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+	});
+
+	it("turns a single-file mode into a files mode that keeps its id, title and command", () => {
+		const { lastDestinationId: _, ...saved } = loadSettings(LEGACY);
+		const settings = loadSettings({
+			...JSON.parse(JSON.stringify(saved)),
+			modes: [
+				saved.modes[0],
+				{ id: "book", title: "Мастер", target: { type: "file", path: "Books/M.md" }, overrides: NO_OVERRIDES, tagGroupIds: ["group-1"] },
+			],
+			lastModeId: "book",
+		});
+		expect(settings.modes[1]).toEqual({
+			id: "book",
+			title: "Мастер",
+			target: { type: "files", files: [{ id: "book", alias: "Мастер", path: "Books/M.md", lastUsedAt: 0 }] },
+			overrides: NO_OVERRIDES,
+			tagGroupIds: ["group-1"],
+		});
+		expect(settings.lastDestinationId).toBe("book");
+		expect(settings).not.toHaveProperty("lastModeId");
 	});
 
 	it("never shares lists between loads", () => {

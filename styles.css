@@ -604,3 +604,17 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 }
+
+.dqc-file-setting .setting-item-control {
+	flex: 1 1 auto;
+}
+
+.dqc-file-setting .setting-item-control input[type="text"]:first-child {
+	flex: 0 1 35%;
+	min-width: 0;
+}
+
+.dqc-file-setting .setting-item-control input[type="text"] {
+	flex: 1 1 65%;
+	min-width: 0;
+}

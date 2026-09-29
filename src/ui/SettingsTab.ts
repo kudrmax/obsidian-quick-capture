@@ -1,5 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { CaptureMode, FormatOverrides, HeadingLevelChoice, NO_OVERRIDES } from "../domain/CaptureMode";
+import { CaptureMode, FormatOverrides, HeadingLevelChoice, ModeFile, NO_OVERRIDES, noteName } from "../domain/CaptureMode";
 import { AfterSend, CaptureSettings, newId, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
 import { IconSuggest } from "./IconSuggest";
@@ -95,7 +95,7 @@ export class SettingsTab extends PluginSettingTab {
 	private modeSettings(): void {
 		new Setting(this.containerEl)
 			.setName("Modes")
-			.setDesc("Where an entry goes. Tap the title on the capture screen to switch. Empty fields use the defaults.")
+			.setDesc("Where an entry goes. A mode writes to the daily note or to any of its files. Tap the title on the capture screen to switch. Empty fields use the defaults.")
 			.setHeading();
 		this.settings.modes.forEach((mode, index) => this.modeSetting(mode, index));
 		new Setting(this.containerEl).addButton((button) =>
@@ -103,7 +103,7 @@ export class SettingsTab extends PluginSettingTab {
 				this.settings.modes.push({
 					id: newId(),
 					title: "",
-					target: { type: "file", path: "" },
+					target: { type: "files", files: [emptyFile()] },
 					overrides: { ...NO_OVERRIDES },
 					tagGroupIds: [],
 				});
@@ -117,10 +117,10 @@ export class SettingsTab extends PluginSettingTab {
 		const isDaily = mode.target.type === "daily";
 		const titleSetting = new Setting(box)
 			.setName(`Mode ${index + 1}`)
-			.setDesc("Title of the capture screen.")
+			.setDesc(isDaily ? "Title of the capture screen." : "Name of this group of files, e.g. Books. Shown only here.")
 			.addText((text) =>
 				text
-					.setPlaceholder(isDaily ? "Today's date" : "Title")
+					.setPlaceholder(isDaily ? "Today's date" : "Name")
 					.setValue(mode.title)
 					.onChange(async (value) => {
 						mode.title = value;
@@ -141,23 +141,22 @@ export class SettingsTab extends PluginSettingTab {
 
 		new Setting(box).setName("Writes to").addDropdown((dropdown) =>
 			dropdown
-				.addOptions({ daily: "Daily note", file: "File" })
+				.addOptions({ daily: "Daily note", files: "Files" })
 				.setValue(mode.target.type)
 				.onChange(async (value) => {
-					mode.target = value === "daily" ? { type: "daily" } : { type: "file", path: "" };
+					mode.target = value === "daily" ? { type: "daily" } : { type: "files", files: [emptyFile()] };
 					await this.saveAndRedraw();
 				}),
 		);
 		const target = mode.target;
-		if (target.type === "file") {
-			new Setting(box).setName("File").addText((text) => {
-				const savePath = async (value: string) => {
-					target.path = value;
-					await this.host.saveSettings();
-				};
-				text.setPlaceholder("Books/Book.md").setValue(target.path).onChange(savePath);
-				new FileSuggest(this.app, text.inputEl, (path) => void savePath(path));
-			});
+		if (target.type === "files") {
+			target.files.forEach((file, fileIndex) => this.fileSetting(box, target.files, file, fileIndex));
+			new Setting(box).setDesc("Each file shows up on the capture screen by its alias, or by its name when the alias is empty.").addButton((button) =>
+				button.setButtonText("Add file").onClick(async () => {
+					target.files.push(emptyFile());
+					await this.saveAndRedraw();
+				}),
+			);
 		}
 
 		this.overrideText(box, FORMAT_FIELDS[0], mode.overrides);
@@ -174,6 +173,41 @@ export class SettingsTab extends PluginSettingTab {
 				}),
 			);
 		});
+	}
+
+	private fileSetting(container: HTMLElement, files: ModeFile[], file: ModeFile, index: number): void {
+		const setting = new Setting(container).setName(`File ${index + 1}`).setClass("dqc-file-setting");
+		let aliasInput: HTMLInputElement | null = null;
+		const aliasPlaceholder = () => noteName(file.path) || "Alias";
+		setting
+			.addText((text) => {
+				aliasInput = text.inputEl;
+				text
+					.setPlaceholder(aliasPlaceholder())
+					.setValue(file.alias)
+					.onChange(async (value) => {
+						file.alias = value;
+						await this.host.saveSettings();
+					});
+			})
+			.addText((text) => {
+				const savePath = async (value: string) => {
+					file.path = value;
+					aliasInput?.setAttribute("placeholder", aliasPlaceholder());
+					await this.host.saveSettings();
+				};
+				text.setPlaceholder("Books/Book.md").setValue(file.path).onChange(savePath);
+				new FileSuggest(this.app, text.inputEl, (path) => void savePath(path));
+			})
+			.addExtraButton((button) =>
+				button
+					.setIcon("trash-2")
+					.setTooltip("Remove file from this mode")
+					.onClick(async () => {
+						files.splice(index, 1);
+						await this.saveAndRedraw();
+					}),
+			);
 	}
 
 	private overrideText(container: HTMLElement, field: TextFormatField, overrides: FormatOverrides): void {
@@ -313,6 +347,10 @@ export class SettingsTab extends PluginSettingTab {
 		await this.host.saveSettings();
 		this.display();
 	}
+}
+
+function emptyFile(): ModeFile {
+	return { id: newId(), alias: "", path: "", lastUsedAt: 0 };
 }
 
 function parseLevelChoice(value: string): HeadingLevelChoice {

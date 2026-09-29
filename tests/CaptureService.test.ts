@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CaptureError, CaptureService, TargetError } from "../src/application/CaptureService";
 import { AttachmentStore, NoteTargets, NoteWriter } from "../src/application/ports";
-import { CaptureMode, EntryFormat, ModeTarget, NO_OVERRIDES } from "../src/domain/CaptureMode";
+import { CaptureMode, Destination, EntryFormat, NO_OVERRIDES, NoteTarget } from "../src/domain/CaptureMode";
 import { CaptureSettings, DEFAULT_SETTINGS } from "../src/settings";
 
 const NOTE = "Daily/2026-09-29.md";
@@ -10,7 +10,7 @@ class FakeNotes implements NoteTargets, NoteWriter {
 	files = new Map<string, string>();
 	failWrites = false;
 
-	async resolve(target: ModeTarget): Promise<string> {
+	async resolve(target: NoteTarget): Promise<string> {
 		const path = target.type === "daily" ? NOTE : target.path;
 		if (!this.files.has(path)) this.files.set(path, "");
 		return path;
@@ -39,14 +39,16 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-const DAILY: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: [] };
-const BOOK: CaptureMode = {
-	id: "book",
-	title: "Book",
-	target: { type: "file", path: "Books/Book.md" },
+const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: [] };
+const BOOKS_MODE: CaptureMode = {
+	id: "books",
+	title: "Книги",
+	target: { type: "files", files: [{ id: "book", alias: "Book", path: "Books/Book.md", lastUsedAt: 0 }] },
 	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " },
 	tagGroupIds: [],
 };
+const DAILY: Destination = { id: "daily", mode: DAILY_MODE, title: "29 September 2026", target: { type: "daily" } };
+const BOOK: Destination = { id: "book", mode: BOOKS_MODE, title: "Book", target: { type: "file", path: "Books/Book.md" } };
 
 function setup(format: Partial<EntryFormat> = {}, other: Partial<CaptureSettings> = {}) {
 	const notes = new FakeNotes();
@@ -135,25 +137,25 @@ describe("CaptureService", () => {
 		expect(notes.files.get(NOTE)).toBe("- 21:37 ![[Recording 20260929213705.m4a]] #idea #book #transcribe");
 	});
 
-	it("writes text to the mode's file with the mode's own format", async () => {
+	it("writes text to the destination's file with its mode's format", async () => {
 		const { notes, service } = setup({ heading: "Дневник" });
 		await service.captureText(BOOK, "Рукописи не горят");
 		expect(notes.files.get("Books/Book.md")).toBe("## Цитаты\n\n> Рукописи не горят");
 		expect(notes.files.has(NOTE)).toBe(false);
 	});
 
-	it("saves audio next to the mode's file", async () => {
+	it("saves audio next to the destination's file", async () => {
 		const { notes, attachments, service } = setup({ heading: "" });
 		await service.captureAudio(BOOK, audio);
 		expect(attachments.savedFor).toEqual(["Books/Book.md"]);
 		expect(notes.files.get("Books/Book.md")).toBe("## Цитаты\n\n- 21:37 ![[Recording 20260929213705.m4a]]");
 	});
 
-	it("refuses a file mode without a file before touching anything", async () => {
+	it("refuses a destination without a file before touching anything", async () => {
 		const { notes, attachments, service } = setup();
-		const noFile: CaptureMode = { ...BOOK, target: { type: "file", path: "" } };
+		const noFile: Destination = { ...BOOK, target: { type: "file", path: "" } };
 		await expect(service.captureAudio(noFile, audio)).rejects.toBeInstanceOf(TargetError);
-		await expect(service.captureText(noFile, "milk")).rejects.toThrow('Choose a file for mode "Book"');
+		await expect(service.captureText(noFile, "milk")).rejects.toThrow('Choose a file for "Book"');
 		expect(attachments.saved).toEqual([]);
 		expect(notes.files.size).toBe(0);
 	});

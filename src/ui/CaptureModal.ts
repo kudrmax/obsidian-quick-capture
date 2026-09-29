@@ -1,6 +1,6 @@
 import { App, Modal, Platform } from "obsidian";
 import { CaptureService } from "../application/CaptureService";
-import { CaptureMode } from "../domain/CaptureMode";
+import { Destination } from "../domain/CaptureMode";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import { CaptureSettings } from "../settings";
 import { CaptureScreen } from "./CaptureScreen";
@@ -10,9 +10,10 @@ export interface CaptureModalDependencies {
 	service: CaptureService;
 	createRecorder: () => AudioRecorder;
 	settings: () => CaptureSettings;
-	modeId: string;
-	onModeChange: (id: string) => void;
-	linkSourcePath: (mode: CaptureMode) => string;
+	destination: Destination;
+	onDestinationChange: (id: string) => void;
+	onCaptured: (id: string) => void;
+	linkSourcePath: (destination: Destination) => string;
 }
 
 export class CaptureModal extends Modal {
@@ -32,11 +33,12 @@ export class CaptureModal extends Modal {
 			service: this.deps.service,
 			createRecorder: this.deps.createRecorder,
 			settings: this.deps.settings,
-			initialModeId: this.deps.modeId,
-			onModeChange: this.deps.onModeChange,
+			initial: this.deps.destination,
+			onDestinationChange: this.deps.onDestinationChange,
+			onCaptured: this.deps.onCaptured,
 			autoFocus: !Platform.isMobile,
-			decorateTextInput: (textarea, mode) =>
-				new CaptureSuggest(this.app, textarea, () => this.deps.linkSourcePath(mode())),
+			decorateTextInput: (textarea, destination) =>
+				new CaptureSuggest(this.app, textarea, () => this.deps.linkSourcePath(destination())),
 			onClose: () => {
 				this.closingConfirmed = true;
 				this.close();

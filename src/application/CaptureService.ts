@@ -1,4 +1,4 @@
-import { CaptureMode, resolveFormat, targetProblem } from "../domain/CaptureMode";
+import { Destination, destinationProblem, resolveFormat } from "../domain/CaptureMode";
 import { Clock } from "../domain/Clock";
 import { EntryFormatter, EntryTemplate } from "../domain/EntryFormatter";
 import { HeadingTarget, insertIntoSection } from "../domain/SectionInserter";
@@ -26,21 +26,21 @@ export class CaptureService {
 		this.formatter = new EntryFormatter(deps.clock);
 	}
 
-	async captureText(mode: CaptureMode, text: string, tags: readonly string[] = []): Promise<void> {
+	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<void> {
 		const content = text.trimEnd();
 		if (content.trim() === "") throw new CaptureError("Nothing to add");
-		const notePath = await this.resolveTarget(mode);
-		const format = resolveFormat(this.deps.settings().defaults, mode.overrides);
+		const notePath = await this.resolveTarget(destination);
+		const format = resolveFormat(this.deps.settings().defaults, destination.mode.overrides);
 		await this.append(notePath, format.heading, format.text, content, tags);
 	}
 
-	async captureAudio(mode: CaptureMode, recording: AudioRecording, tags: readonly string[] = []): Promise<void> {
+	async captureAudio(destination: Destination, recording: AudioRecording, tags: readonly string[] = []): Promise<void> {
 		if (recording.data.byteLength === 0 || recording.durationMs < MIN_RECORDING_MS) {
 			throw new CaptureError("Recording is empty");
 		}
 		const settings = this.deps.settings();
-		const notePath = await this.resolveTarget(mode);
-		const format = resolveFormat(settings.defaults, mode.overrides);
+		const notePath = await this.resolveTarget(destination);
+		const format = resolveFormat(settings.defaults, destination.mode.overrides);
 		const saved = await this.deps.attachments.save(this.recordingFileName(recording.extension), recording.data, notePath);
 		const content = `${settings.embedAudio ? "!" : ""}${saved.link}`;
 		try {
@@ -51,10 +51,10 @@ export class CaptureService {
 		}
 	}
 
-	private resolveTarget(mode: CaptureMode): Promise<string> {
-		const problem = targetProblem(mode);
+	private resolveTarget(destination: Destination): Promise<string> {
+		const problem = destinationProblem(destination);
 		if (problem) return Promise.reject(new TargetError(problem));
-		return this.deps.targets.resolve(mode.target);
+		return this.deps.targets.resolve(destination.target);
 	}
 
 	private async append(
