@@ -20,4 +20,18 @@ describe("EntryFormatter", () => {
 	it("keeps multiline content as is", () => {
 		expect(formatter.format({ prefix: "- ", suffix: " #t" }, "a\nb")).toBe("- a\nb #t");
 	});
+
+	it("puts tags between the content and the suffix", () => {
+		expect(formatter.format({ prefix: "- ", suffix: " #transcribe" }, "[[a.m4a]]", ["#idea", "#book/quote"])).toBe(
+			"- [[a.m4a]] #idea #book/quote #transcribe",
+		);
+	});
+
+	it("adds a missing # to a tag and skips blank and repeated tags", () => {
+		expect(formatter.format({ prefix: "", suffix: "" }, "x", ["idea", " ", "#idea", " #todo "])).toBe("x #idea #todo");
+	});
+
+	it("puts tags at the end of the last line of multiline content", () => {
+		expect(formatter.format({ prefix: "- ", suffix: "" }, "a\nb", ["#t"])).toBe("- a\nb #t");
+	});
 });

@@ -5,15 +5,15 @@ import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
 import { ObsidianAttachments } from "./infrastructure/ObsidianAttachments";
 import { ObsidianDailyNotes } from "./infrastructure/ObsidianDailyNotes";
 import { ObsidianNoteWriter } from "./infrastructure/ObsidianNoteWriter";
-import { CaptureSettings, DEFAULT_SETTINGS } from "./settings";
+import { CaptureSettings, loadSettings } from "./settings";
 import { CaptureModal } from "./ui/CaptureModal";
 import { SettingsHost, SettingsTab } from "./ui/SettingsTab";
 
 export default class DailyQuickCapturePlugin extends Plugin implements SettingsHost {
-	override settings: CaptureSettings = { ...DEFAULT_SETTINGS };
+	override settings: CaptureSettings = loadSettings(null);
 
 	override async onload(): Promise<void> {
-		this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
+		this.settings = loadSettings(await this.loadData());
 
 		const dailyNotes = new ObsidianDailyNotes(this.app, systemClock, (message) => new Notice(message));
 		const service = new CaptureService({
