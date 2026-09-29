@@ -2,6 +2,7 @@ import { Notice, setIcon } from "obsidian";
 import { CaptureError, CaptureService } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
+import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
 import { Waveform } from "./Waveform";
 
@@ -31,6 +32,9 @@ export class CaptureScreen {
 	private state: State = "input";
 	private readonly root: HTMLElement;
 	private readonly textarea: HTMLTextAreaElement;
+	private readonly highlightEl: HTMLElement;
+	private readonly bodyEl: HTMLElement;
+	private readonly titleEl: HTMLElement;
 	private readonly statusEl: HTMLElement;
 	private readonly timerEl: HTMLElement;
 	private readonly closeSlot: HTMLElement;
@@ -56,18 +60,22 @@ export class CaptureScreen {
 		this.root.addEventListener("touchend", (event) => this.onTouchEnd(event), { passive: true });
 
 		const body = this.root.createDiv({ cls: "dqc-body" });
+		this.bodyEl = body;
 		body.addEventListener("click", (event) => {
 			if (this.state === "input" && event.target !== this.textarea) this.textarea.focus();
 		});
-		body.createDiv({
+		this.titleEl = body.createDiv({
 			cls: "dqc-title",
 			text: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
 		});
-		this.textarea = body.createEl("textarea", { cls: "dqc-text", attr: { placeholder: "What's on your mind?", rows: "1" } });
+		const editor = body.createDiv({ cls: "dqc-editor" });
+		this.highlightEl = editor.createDiv({ cls: "dqc-highlight", attr: { "aria-hidden": "true" } });
+		this.textarea = editor.createEl("textarea", { cls: "dqc-text", attr: { placeholder: "What's on your mind?", rows: "1" } });
 		this.textarea.addEventListener("input", () => {
-			this.fitTextareaToContent();
+			this.renderText();
 			this.renderControls();
 		});
+		this.textarea.addEventListener("scroll", () => (this.highlightEl.scrollTop = this.textarea.scrollTop));
 		options.decorateTextInput(this.textarea);
 
 		const recorderView = body.createDiv({ cls: "dqc-recorder" });
@@ -95,6 +103,11 @@ export class CaptureScreen {
 
 	setKeyboardVisible(visible: boolean): void {
 		this.root.toggleClass("is-keyboard-visible", visible);
+	}
+
+	submit(): void {
+		const canSendText = this.state === "input" && this.textarea.value.trim() !== "";
+		if (canSendText || this.state === "stopped") void this.send();
 	}
 
 	requestClose(): void {
@@ -207,7 +220,6 @@ export class CaptureScreen {
 	private resetAfterSend(): void {
 		this.pendingRecording = null;
 		this.textarea.value = "";
-		this.fitTextareaToContent();
 		this.elapsedMs = 0;
 		this.waveform.clear();
 		this.state = "input";
@@ -258,9 +270,24 @@ export class CaptureScreen {
 		}
 	}
 
-	private fitTextareaToContent(): void {
+	private renderText(): void {
+		this.highlightEl.empty();
+		for (const segment of highlightSegments(this.textarea.value)) {
+			if (segment.kind === "plain") this.highlightEl.appendText(segment.text);
+			else this.highlightEl.createSpan({ cls: `dqc-hl-${segment.kind}`, text: segment.text });
+		}
+		this.highlightEl.appendText("\u200b");
 		this.textarea.style.height = "auto";
-		this.textarea.style.height = `${this.textarea.scrollHeight}px`;
+		this.textarea.style.height = `${Math.min(this.textarea.scrollHeight, this.availableTextHeight())}px`;
+		this.highlightEl.scrollTop = this.textarea.scrollTop;
+	}
+
+	private availableTextHeight(): number {
+		const style = getComputedStyle(this.bodyEl);
+		const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+		const title = this.titleEl.offsetHeight + parseFloat(getComputedStyle(this.titleEl).marginBottom);
+		const available = this.bodyEl.clientHeight - padding - title;
+		return available > 0 ? available : Number.POSITIVE_INFINITY;
 	}
 
 	private setState(state: State): void {
@@ -272,6 +299,7 @@ export class CaptureScreen {
 		this.root.dataset.state = this.state;
 		this.root.dataset.mode = this.isAudioMode() ? "audio" : "text";
 		this.textarea.readOnly = this.state === "sending";
+		if (!this.isAudioMode()) this.renderText();
 		this.statusEl.setText(
 			{ recording: "Recording", paused: "Paused", stopped: "Ready to send", sending: "Sending", input: "" }[this.state],
 		);

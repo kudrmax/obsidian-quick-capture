@@ -36,6 +36,11 @@ export class CaptureModal extends Modal {
 				this.close();
 			},
 		});
+		this.scope.register(["Mod"], "Enter", (event) => {
+			event.preventDefault();
+			this.screen?.submit();
+			return false;
+		});
 		window.addEventListener("keyboardWillShow", this.onKeyboardShow);
 		window.addEventListener("keyboardWillHide", this.onKeyboardHide);
 		window.setTimeout(() => this.screen?.focus(), 50);

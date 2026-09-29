@@ -23,6 +23,7 @@ interface LinkTarget {
 }
 
 const SUGGESTION_LIMIT = 20;
+const CARET_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]);
 
 export class CaptureSuggest extends AbstractInputSuggest<Suggestion> {
 	private tagCounts: Map<string, number> | null = null;
@@ -35,6 +36,11 @@ export class CaptureSuggest extends AbstractInputSuggest<Suggestion> {
 	) {
 		super(app, textarea as unknown as HTMLInputElement);
 		this.limit = SUGGESTION_LIMIT;
+		const refresh = () => textarea.dispatchEvent(new Event("input"));
+		textarea.addEventListener("click", refresh);
+		textarea.addEventListener("keyup", (event) => {
+			if (CARET_KEYS.has(event.key)) refresh();
+		});
 	}
 
 	protected getSuggestions(): Suggestion[] {
