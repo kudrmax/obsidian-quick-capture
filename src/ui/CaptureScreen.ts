@@ -368,8 +368,8 @@ export class CaptureScreen {
 	}
 
 	private toggleTagPicker(): void {
-		if (!this.tagPicker.isOpen()) this.textarea.blur();
 		this.tagPicker.toggle();
+		if (this.tagPicker.isOpen()) this.textarea.blur();
 	}
 
 	private controlsForState(): [ControlSpec | null, ControlSpec] {

@@ -420,12 +420,9 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 	gap: 22px;
 	padding: 20px 20px 8px;
 	overflow-y: auto;
+	background: color-mix(in srgb, var(--background-primary) 65%, transparent);
 	opacity: 0;
 	pointer-events: none;
-	transition: opacity 200ms ease;
-}
-
-.dqc-body {
 	transition: opacity 200ms ease;
 }
 
@@ -435,7 +432,6 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 }
 
 .dqc-screen.is-picking-tags .dqc-body {
-	opacity: 0.35;
 	pointer-events: none;
 }
 
