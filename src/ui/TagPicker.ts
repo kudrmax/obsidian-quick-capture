@@ -1,4 +1,4 @@
-import { TagGroup } from "../settings";
+import { QuickTag, TagGroup } from "../settings";
 import { renderTagLabel } from "./TagIcon";
 
 export class TagPicker {
@@ -39,11 +39,9 @@ export class TagPicker {
 
 	private render(): void {
 		this.layerEl.empty();
-		for (const group of this.groups()) {
-			const tags = group.tags.filter((quickTag) => quickTag.tag.trim() !== "");
-			if (tags.length === 0) continue;
+		for (const { name, tags } of tagSections(this.groups())) {
 			const groupEl = this.layerEl.createDiv({ cls: "dqc-tags-group" });
-			if (group.name.trim() !== "") groupEl.createDiv({ cls: "dqc-tags-group-name", text: group.name });
+			if (name !== null) groupEl.createDiv({ cls: "dqc-tags-group-name", text: name });
 			const row = groupEl.createDiv({ cls: "dqc-tags-row" });
 			for (const quickTag of tags) {
 				const tag = quickTag.tag.trim();
@@ -63,4 +61,16 @@ export class TagPicker {
 
 export function hasQuickTags(groups: TagGroup[]): boolean {
 	return groups.some((group) => group.tags.some((quickTag) => quickTag.tag.trim() !== ""));
+}
+
+export interface TagSection {
+	name: string | null;
+	tags: QuickTag[];
+}
+
+export function tagSections(groups: TagGroup[]): TagSection[] {
+	const filled = groups
+		.map((group) => ({ name: group.name.trim(), tags: group.tags.filter((quickTag) => quickTag.tag.trim() !== "") }))
+		.filter((group) => group.tags.length > 0);
+	return filled.map(({ name, tags }) => ({ name: filled.length > 1 && name !== "" ? name : null, tags }));
 }
