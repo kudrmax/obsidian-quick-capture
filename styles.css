@@ -435,7 +435,7 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 }
 
 .dqc-screen.is-picking-tags .dqc-body {
-	opacity: 0;
+	opacity: 0.35;
 	pointer-events: none;
 }
 
