@@ -56,9 +56,8 @@ export class ModePicker {
 
 	private render(): void {
 		this.layerEl.empty();
-		const list = this.layerEl.createDiv({ cls: "dqc-modes-list" });
 		for (const mode of this.modes()) {
-			const button = list.createEl("button", { cls: "dqc-mode", text: this.title(mode) });
+			const button = this.layerEl.createEl("button", { cls: "dqc-mode", text: this.title(mode) });
 			button.toggleClass("is-current", mode.id === this.currentId());
 			button.onclick = () => {
 				this.close();
