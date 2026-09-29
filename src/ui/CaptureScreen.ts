@@ -104,10 +104,12 @@ export class CaptureScreen {
 
 		const footer = this.root.createDiv({ cls: "dqc-footer" });
 		const controls = footer.createDiv({ cls: "dqc-controls" });
-		this.tagSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side dqc-slot-tags" });
-		this.leftSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
+		const start = controls.createDiv({ cls: "dqc-controls-side dqc-controls-start" });
+		this.tagSlot = start.createDiv({ cls: "dqc-slot dqc-slot-side dqc-slot-tags" });
+		this.leftSlot = start.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.centerSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-center" });
-		this.closeSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
+		const end = controls.createDiv({ cls: "dqc-controls-side dqc-controls-end" });
+		this.closeSlot = end.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.footerObserver = new ResizeObserver(() =>
 			this.root.style.setProperty("--dqc-footer-height", `${footer.offsetHeight}px`),
 		);
