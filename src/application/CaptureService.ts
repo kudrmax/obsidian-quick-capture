@@ -1,6 +1,6 @@
 import { Clock } from "../domain/Clock";
 import { EntryFormatter, EntryTemplate } from "../domain/EntryFormatter";
-import { insertIntoSection } from "../domain/SectionInserter";
+import { insertIntoSection, parseHeading } from "../domain/SectionInserter";
 import { CaptureSettings } from "../settings";
 import { AttachmentStore, AudioRecording, DailyNoteGateway, NoteWriter } from "./ports";
 
@@ -55,7 +55,7 @@ export class CaptureService {
 		tags: readonly string[],
 	): Promise<void> {
 		const entry = this.formatter.format(template, content, tags);
-		await this.deps.notes.update(notePath, (note) => insertIntoSection(note, settings.heading, entry));
+		await this.deps.notes.update(notePath, (note) => insertIntoSection(note, parseHeading(settings.heading, 2), entry));
 	}
 
 	private recordingFileName(extension: string): string {
