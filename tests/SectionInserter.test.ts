@@ -53,4 +53,17 @@ describe("insertIntoSection", () => {
 	it("accepts a heading setting written with leading hashes", () => {
 		expect(insertIntoSection("## Journal\n- a\n## T\n", "## Journal", "- b")).toBe("## Journal\n- a\n- b\n## T\n");
 	});
+
+	it("keeps each existing line ending in notes with mixed line endings", () => {
+		expect(insertIntoSection("a\r\n## Journal\n- x\n", "Journal", "- y")).toBe("a\r\n## Journal\n- x\n- y\n");
+	});
+
+	it("recognizes frontmatter behind a byte order mark", () => {
+		const note = "\uFEFF---\n# Journal\n---\n## Journal\n- a\n## Other\n- o\n";
+		expect(insertIntoSection(note, "Journal", "- b")).toBe(note.replace("- a\n", "- a\n- b\n"));
+	});
+
+	it("keeps a trailing hash that is part of the heading text", () => {
+		expect(insertIntoSection("## C#\n- a\n## T\n", "C#", "- b")).toBe("## C#\n- a\n- b\n## T\n");
+	});
 });

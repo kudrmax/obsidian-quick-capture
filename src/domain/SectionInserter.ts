@@ -4,38 +4,54 @@ interface Heading {
 	text: string;
 }
 
-const HEADING = /^(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$/;
+interface SplitNote {
+	lines: string[];
+	separators: string[];
+}
+
+const HEADING = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
 const FENCE = /^[ \t]*(```|~~~)/;
+const BYTE_ORDER_MARK = "﻿";
 
 export function insertIntoSection(note: string, heading: string, entry: string): string {
-	const separator = note.includes("\r\n") ? "\r\n" : "\n";
-	const lines = note.split(/\r?\n/);
 	const entryLines = entry.split(/\r?\n/);
+	if (note === "") return entryLines.join("\n");
+
+	const { lines, separators } = splitNote(note);
 	const target = heading.replace(/^\s*#+/, "").trim().toLowerCase();
 	const headings = findHeadings(lines);
 	const match = target === "" ? undefined : headings.find((h) => h.text.trim().toLowerCase() === target);
+	const insertAt = match ? sectionInsertIndex(lines, headings, match) : endInsertIndex(lines);
 
-	if (!match) return appendToEnd(note, lines, entryLines, separator);
-
-	const next = headings.find((h) => h.line > match.line && h.level <= match.level);
-	const sectionEnd = next ? next.line : lines.length;
-	let insertAt = match.line + 1;
-	for (let i = sectionEnd - 1; i > match.line; i--) {
-		if (lines[i].trim() !== "") {
-			insertAt = i + 1;
-			break;
-		}
-	}
+	const separator = separators[insertAt - 1] ?? separators[0] ?? "\n";
 	lines.splice(insertAt, 0, ...entryLines);
-	return lines.join(separator);
+	separators.splice(insertAt, 0, ...entryLines.map(() => separator));
+	return joinNote(lines, separators);
 }
 
-function appendToEnd(note: string, lines: string[], entryLines: string[], separator: string): string {
-	if (note === "") return entryLines.join(separator);
-	const endsWithNewline = lines[lines.length - 1] === "";
-	if (endsWithNewline) lines.splice(lines.length - 1, 0, ...entryLines);
-	else lines.push(...entryLines);
-	return lines.join(separator);
+function sectionInsertIndex(lines: string[], headings: Heading[], match: Heading): number {
+	const next = headings.find((h) => h.line > match.line && h.level <= match.level);
+	const sectionEnd = next ? next.line : lines.length;
+	for (let i = sectionEnd - 1; i > match.line; i--) {
+		if (lines[i].trim() !== "") return i + 1;
+	}
+	return match.line + 1;
+}
+
+function endInsertIndex(lines: string[]): number {
+	return lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
+}
+
+function splitNote(note: string): SplitNote {
+	const parts = note.split(/(\r?\n)/);
+	return {
+		lines: parts.filter((_, index) => index % 2 === 0),
+		separators: parts.filter((_, index) => index % 2 === 1),
+	};
+}
+
+function joinNote(lines: string[], separators: string[]): string {
+	return lines.map((line, index) => line + (separators[index] ?? "")).join("");
 }
 
 function findHeadings(lines: string[]): Heading[] {
@@ -57,7 +73,8 @@ function findHeadings(lines: string[]): Heading[] {
 }
 
 function skipFrontmatter(lines: string[]): number {
-	if (lines[0] !== "---") return 0;
+	const first = lines[0]?.startsWith(BYTE_ORDER_MARK) ? lines[0].slice(1) : lines[0];
+	if (first !== "---") return 0;
 	const end = lines.indexOf("---", 1);
 	return end === -1 ? 0 : end + 1;
 }
