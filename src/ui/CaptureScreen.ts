@@ -15,7 +15,7 @@ export interface CaptureScreenOptions {
 	onClose: () => void;
 }
 
-type State = "input" | "recording" | "paused" | "stopped" | "sending";
+type State = "input" | "starting" | "recording" | "paused" | "stopped" | "sending";
 
 interface ControlSpec {
 	icon: string;
@@ -47,11 +47,9 @@ export class CaptureScreen {
 	private recorder: AudioRecorder | null = null;
 	private pendingRecording: Promise<AudioRecording> | null = null;
 	private sendingAudio = false;
-	private startingRecording = false;
 	private destroyed = false;
 	private sampleTimer: number | null = null;
-	private elapsedMs = 0;
-	private segmentStartedAt = 0;
+	private stoppedElapsedMs = 0;
 	private touchStart: { x: number; y: number } | null = null;
 
 	constructor(container: HTMLElement, private readonly options: CaptureScreenOptions) {
@@ -126,59 +124,66 @@ export class CaptureScreen {
 		return this.state === "recording" || this.state === "paused" || this.state === "stopped";
 	}
 
+	private isStarting(): boolean {
+		return this.state === "starting";
+	}
+
 	private isAudioMode(): boolean {
-		return this.hasUnsentAudio() || (this.state === "sending" && this.sendingAudio);
+		return this.state === "starting" || this.hasUnsentAudio() || (this.state === "sending" && this.sendingAudio);
 	}
 
 	private async startRecording(): Promise<void> {
-		if (this.startingRecording) return;
-		this.startingRecording = true;
-		this.renderControls();
+		if (this.state !== "input") return;
+		this.textarea.blur();
+		this.stoppedElapsedMs = 0;
+		this.waveform.clear();
+		this.setState("starting");
 		const recorder = this.options.createRecorder();
 		try {
+			await nextFrame();
 			await recorder.start();
 		} catch (error) {
 			recorder.cancel();
-			if (!this.destroyed) new Notice(`Microphone is not available: ${errorMessage(error)}`);
+			if (this.destroyed) return;
+			new Notice(`Microphone is not available: ${errorMessage(error)}`);
+			this.setState("input");
 			return;
-		} finally {
-			this.startingRecording = false;
 		}
-		if (this.destroyed || this.state !== "input") {
+		if (this.destroyed || !this.isStarting()) {
 			recorder.cancel();
 			return;
 		}
 		this.recorder = recorder;
-		this.textarea.blur();
-		this.elapsedMs = 0;
-		this.waveform.clear();
 		this.setState("recording");
-		this.resumeSegment();
+		this.startSampling();
 	}
 
 	private pause(): void {
 		this.recorder?.pause();
-		this.closeSegment();
+		this.stopSampling();
 		this.setState("paused");
 	}
 
 	private resume(): void {
 		this.recorder?.resume();
 		this.setState("recording");
-		this.resumeSegment();
+		this.startSampling();
 	}
 
 	private stop(): void {
-		if (this.state === "recording") this.closeSegment();
-		this.pendingRecording = this.recorder?.stop() ?? null;
-		this.pendingRecording?.catch(() => undefined);
+		const recorder = this.recorder;
+		if (!recorder) return;
+		this.stopSampling();
+		this.stoppedElapsedMs = recorder.elapsedMs();
 		this.recorder = null;
+		this.pendingRecording = nextFrame().then(() => recorder.stop());
+		this.pendingRecording.catch(() => undefined);
 		this.setState("stopped");
 	}
 
 	private discard(): void {
 		this.releaseRecorder();
-		this.elapsedMs = 0;
+		this.stoppedElapsedMs = 0;
 		this.waveform.clear();
 		this.setState("input");
 		this.focus();
@@ -220,7 +225,7 @@ export class CaptureScreen {
 	private resetAfterSend(): void {
 		this.pendingRecording = null;
 		this.textarea.value = "";
-		this.elapsedMs = 0;
+		this.stoppedElapsedMs = 0;
 		this.waveform.clear();
 		this.state = "input";
 		if (this.options.settings().afterSend === "close") {
@@ -231,18 +236,13 @@ export class CaptureScreen {
 		this.focus();
 	}
 
-	private resumeSegment(): void {
-		this.segmentStartedAt = performance.now();
+	private startSampling(): void {
+		this.stopSampling();
 		this.sampleTimer = window.setInterval(() => {
 			this.waveform.push(this.recorder?.level() ?? 0);
 			this.waveform.draw();
 			this.renderTimer();
 		}, SAMPLE_INTERVAL_MS);
-	}
-
-	private closeSegment(): void {
-		this.elapsedMs += performance.now() - this.segmentStartedAt;
-		this.stopSampling();
 	}
 
 	private stopSampling(): void {
@@ -251,7 +251,7 @@ export class CaptureScreen {
 	}
 
 	private currentElapsedMs(): number {
-		return this.state === "recording" ? this.elapsedMs + performance.now() - this.segmentStartedAt : this.elapsedMs;
+		return this.recorder?.elapsedMs() ?? this.stoppedElapsedMs;
 	}
 
 	private onTouchStart(event: TouchEvent): void {
@@ -301,7 +301,14 @@ export class CaptureScreen {
 		this.textarea.readOnly = this.state === "sending";
 		if (!this.isAudioMode()) this.renderText();
 		this.statusEl.setText(
-			{ recording: "Recording", paused: "Paused", stopped: "Ready to send", sending: "Sending", input: "" }[this.state],
+			{
+				input: "",
+				starting: "Starting",
+				recording: "Recording",
+				paused: "Paused",
+				stopped: "Ready to send",
+				sending: "Sending",
+			}[this.state],
 		);
 		this.renderTimer();
 		this.renderControls();
@@ -317,18 +324,15 @@ export class CaptureScreen {
 
 	private renderControls(): void {
 		const [left, center] = this.controlsForState();
-		this.closeSlot.empty();
-		this.leftSlot.empty();
-		this.centerSlot.empty();
-		this.createControl(this.closeSlot, {
+		this.renderControl(this.closeSlot, {
 			icon: "x",
 			label: "Close",
 			tone: "secondary",
 			onClick: () => this.requestClose(),
 			disabled: this.state === "sending",
 		});
-		if (left) this.createControl(this.leftSlot, left);
-		this.createControl(this.centerSlot, center);
+		this.renderControl(this.leftSlot, left);
+		this.renderControl(this.centerSlot, center);
 	}
 
 	private controlsForState(): [ControlSpec | null, ControlSpec] {
@@ -343,9 +347,13 @@ export class CaptureScreen {
 								label: "Record",
 								tone: "primary",
 								onClick: () => void this.startRecording(),
-								disabled: this.startingRecording,
 							},
 						];
+			case "starting":
+				return [
+					{ icon: "pause", label: "Pause", tone: "secondary", onClick: () => {}, disabled: true },
+					{ icon: "square", label: "Stop", tone: "danger", onClick: () => {}, disabled: true },
+				];
 			case "recording":
 				return [
 					{ icon: "pause", label: "Pause", tone: "secondary", onClick: () => this.pause() },
@@ -366,15 +374,22 @@ export class CaptureScreen {
 		}
 	}
 
-	private createControl(parent: HTMLElement, spec: ControlSpec): HTMLButtonElement {
-		const button = parent.createEl("button", {
-			cls: `dqc-control dqc-${spec.tone}`,
-			attr: { "aria-label": spec.label, title: spec.label },
-		});
-		setIcon(button, spec.icon);
+	private renderControl(slot: HTMLElement, spec: ControlSpec | null): void {
+		if (!spec) {
+			slot.empty();
+			return;
+		}
+		const button = slot.querySelector("button") ?? slot.createEl("button");
+		button.className = `dqc-control dqc-${spec.tone}`;
+		button.setAttribute("aria-label", spec.label);
+		button.setAttribute("title", spec.label);
+		if (button.dataset.icon !== spec.icon) {
+			button.empty();
+			setIcon(button, spec.icon);
+			button.dataset.icon = spec.icon;
+		}
 		button.disabled = spec.disabled ?? false;
 		button.onclick = spec.onClick;
-		return button;
 	}
 
 	private showConfirm(): void {
@@ -393,6 +408,10 @@ export class CaptureScreen {
 		};
 		this.confirmEl.addClass("is-open");
 	}
+}
+
+function nextFrame(): Promise<void> {
+	return new Promise((resolve) => window.requestAnimationFrame(() => window.setTimeout(resolve, 0)));
 }
 
 function errorMessage(error: unknown): string {
