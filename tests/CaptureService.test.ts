@@ -38,7 +38,7 @@ class FakeAttachments implements AttachmentStore {
 function setup(overrides: Partial<CaptureSettings> = {}) {
 	const notes = new FakeNotes();
 	const attachments = new FakeAttachments();
-	const settings = { ...DEFAULT_SETTINGS, heading: "Journal", ...overrides };
+	const settings = { ...DEFAULT_SETTINGS, ...overrides };
 	const service = new CaptureService({
 		dailyNotes: notes,
 		notes,
@@ -99,5 +99,12 @@ describe("CaptureService", () => {
 		const { notes, service } = setup();
 		await service.captureText("milk\n\n  ");
 		expect(notes.files.get(NOTE)).toBe("- 21:37 milk");
+	});
+
+	it("writes under the configured heading, creating it when missing", async () => {
+		const { notes, service } = setup({ heading: "### Дневник" });
+		await service.captureText("first");
+		await service.captureText("second");
+		expect(notes.files.get(NOTE)).toBe("### Дневник\n- 21:37 first\n- 21:37 second");
 	});
 });

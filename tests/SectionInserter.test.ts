@@ -20,9 +20,18 @@ describe("insertIntoSection", () => {
 		expect(insertIntoSection("## Journal\n- a", "Journal", "- b")).toBe("## Journal\n- a\n- b");
 	});
 
-	it("appends to the end of the note when the heading is missing", () => {
-		expect(insertIntoSection("text\n", "Journal", "- b")).toBe("text\n- b\n");
-		expect(insertIntoSection("text", "Journal", "- b")).toBe("text\n- b");
+	it("creates a missing heading at the end of the note, separated by a blank line", () => {
+		expect(insertIntoSection("text\n", "Journal", "- b")).toBe("text\n\n## Journal\n- b\n");
+		expect(insertIntoSection("text", "Journal", "- b")).toBe("text\n\n## Journal\n- b");
+		expect(insertIntoSection("text\n\n", "Journal", "- b")).toBe("text\n\n## Journal\n- b\n");
+	});
+
+	it("creates the missing heading with the level written in the setting", () => {
+		expect(insertIntoSection("- task\n", "### Дневник", "- b")).toBe("- task\n\n### Дневник\n- b\n");
+	});
+
+	it("finds an existing heading regardless of the level in the setting", () => {
+		expect(insertIntoSection("### Дневник\n- a\n", "## дневник", "- b")).toBe("### Дневник\n- a\n- b\n");
 	});
 
 	it("appends to the end of the note when heading setting is empty", () => {
@@ -30,7 +39,8 @@ describe("insertIntoSection", () => {
 	});
 
 	it("writes into an empty note", () => {
-		expect(insertIntoSection("", "Journal", "- b")).toBe("- b");
+		expect(insertIntoSection("", "", "- b")).toBe("- b");
+		expect(insertIntoSection("", "Journal", "- b")).toBe("## Journal\n- b");
 	});
 
 	it("ignores headings inside frontmatter and code fences", () => {

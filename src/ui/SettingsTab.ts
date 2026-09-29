@@ -19,7 +19,7 @@ export class SettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		this.textSetting("Heading", "Entries are added at the end of this heading's section. Leave empty to add to the end of the note.", "heading", "Journal");
+		this.textSetting("Heading", "Entries go to the end of this heading's section. If the note has no such heading, it is created at the end of the note: write \"### Journal\" to choose its level (default ##). Leave empty to add to the end of the note.", "heading", "Journal");
 
 		new Setting(containerEl).setName("Text entries").setHeading();
 		this.textSetting("Prefix", TIME_HINT, "textPrefix");

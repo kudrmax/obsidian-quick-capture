@@ -11,21 +11,41 @@ interface SplitNote {
 
 const HEADING = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
 const FENCE = /^[ \t]*(```|~~~)/;
-const BYTE_ORDER_MARK = "﻿";
+const BYTE_ORDER_MARK = "\uFEFF";
+const DEFAULT_HEADING_MARK = "##";
 
 export function insertIntoSection(note: string, heading: string, entry: string): string {
+	const target = parseHeadingSetting(heading);
 	const entryLines = entry.split(/\r?\n/);
-	if (note === "") return entryLines.join("\n");
+	if (note === "") return (target ? [target.line, ...entryLines] : entryLines).join("\n");
 
 	const { lines, separators } = splitNote(note);
-	const target = heading.replace(/^\s*#+/, "").trim().toLowerCase();
 	const headings = findHeadings(lines);
-	const match = target === "" ? undefined : headings.find((h) => h.text.trim().toLowerCase() === target);
-	const insertAt = match ? sectionInsertIndex(lines, headings, match) : endInsertIndex(lines);
+	const match = target ? headings.find((h) => h.text.trim().toLowerCase() === target.key) : undefined;
+	if (match) return insertLines(lines, separators, sectionInsertIndex(lines, headings, match), entryLines);
 
+	const insertAt = endInsertIndex(lines);
+	if (!target) return insertLines(lines, separators, insertAt, entryLines);
+	const spacer = insertAt > 0 && lines[insertAt - 1].trim() !== "" ? [""] : [];
+	return insertLines(lines, separators, insertAt, [...spacer, target.line, ...entryLines]);
+}
+
+interface HeadingSetting {
+	key: string;
+	line: string;
+}
+
+function parseHeadingSetting(heading: string): HeadingSetting | null {
+	const match = /^\s*(#{1,6})?\s*(.*?)\s*$/.exec(heading);
+	const text = match?.[2] ?? "";
+	if (text === "") return null;
+	return { key: text.toLowerCase(), line: `${match?.[1] ?? DEFAULT_HEADING_MARK} ${text}` };
+}
+
+function insertLines(lines: string[], separators: string[], insertAt: number, inserted: string[]): string {
 	const separator = separators[insertAt - 1] ?? separators[0] ?? "\n";
-	lines.splice(insertAt, 0, ...entryLines);
-	separators.splice(insertAt, 0, ...entryLines.map(() => separator));
+	lines.splice(insertAt, 0, ...inserted);
+	separators.splice(insertAt, 0, ...inserted.map(() => separator));
 	return joinNote(lines, separators);
 }
 
