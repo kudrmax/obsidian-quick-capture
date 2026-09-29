@@ -2,6 +2,7 @@ import { CaptureMode } from "../domain/CaptureMode";
 
 export class ModePicker {
 	private readonly layerEl: HTMLElement;
+	private readonly resizeObserver: ResizeObserver;
 
 	constructor(
 		private readonly screenEl: HTMLElement,
@@ -16,6 +17,14 @@ export class ModePicker {
 		this.layerEl.addEventListener("click", (event) => {
 			if (!(event.target as HTMLElement).closest("button")) this.close();
 		});
+		this.resizeObserver = new ResizeObserver(() => {
+			if (this.isOpen()) this.placeUnderAnchor();
+		});
+		this.resizeObserver.observe(screenEl);
+	}
+
+	destroy(): void {
+		this.resizeObserver.disconnect();
 	}
 
 	isOpen(): boolean {
@@ -29,8 +38,7 @@ export class ModePicker {
 
 	open(): void {
 		this.render();
-		const top = this.anchorEl.getBoundingClientRect().bottom - this.screenEl.getBoundingClientRect().top;
-		this.layerEl.style.setProperty("--dqc-modes-top", `${top}px`);
+		this.placeUnderAnchor();
 		this.screenEl.addClass("is-picking-mode");
 		this.onChange();
 	}
@@ -39,6 +47,11 @@ export class ModePicker {
 		if (!this.isOpen()) return;
 		this.screenEl.removeClass("is-picking-mode");
 		this.onChange();
+	}
+
+	private placeUnderAnchor(): void {
+		const top = this.anchorEl.getBoundingClientRect().bottom - this.screenEl.getBoundingClientRect().top;
+		this.layerEl.style.setProperty("--dqc-modes-top", `${top}px`);
 	}
 
 	private render(): void {

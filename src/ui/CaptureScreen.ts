@@ -76,8 +76,9 @@ export class CaptureScreen {
 		});
 		this.titleEl = body.createDiv({ cls: "dqc-title" });
 		this.titleEl.addEventListener("click", (event) => {
+			if (!this.titleEl.hasClass("is-switchable")) return;
 			event.stopPropagation();
-			if (this.titleEl.hasClass("is-switchable")) this.toggleModePicker();
+			this.toggleModePicker();
 		});
 		const editor = body.createDiv({ cls: "dqc-editor" });
 		this.highlightEl = editor.createDiv({ cls: "dqc-highlight", attr: { "aria-hidden": "true" } });
@@ -143,6 +144,7 @@ export class CaptureScreen {
 	destroy(): void {
 		this.destroyed = true;
 		this.footerObserver.disconnect();
+		this.modePicker.destroy();
 		this.releaseRecorder();
 	}
 
@@ -435,8 +437,8 @@ export class CaptureScreen {
 
 	private toggleModePicker(): void {
 		this.tagPicker.close();
+		if (!this.modePicker.isOpen()) this.textarea.blur();
 		this.modePicker.toggle();
-		if (this.modePicker.isOpen()) this.textarea.blur();
 	}
 
 	private controlsForState(): [ControlSpec | null, ControlSpec] {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NO_OVERRIDES } from "../src/domain/CaptureMode";
-import { DEFAULT_SETTINGS, loadSettings } from "../src/settings";
+import { DEFAULT_SETTINGS, loadSettings, newId } from "../src/settings";
 
 const LEGACY = {
 	heading: "Дневник",
@@ -76,5 +76,19 @@ describe("loadSettings", () => {
 		const second = loadSettings(undefined);
 		expect(second.tagGroups).toEqual([]);
 		expect(second.modes[0].tagGroupIds).toEqual([]);
+	});
+});
+
+describe("newId", () => {
+	it("still makes unique ids where crypto.randomUUID is missing", () => {
+		const original = crypto.randomUUID;
+		Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+		try {
+			const ids = new Set(Array.from({ length: 50 }, () => newId()));
+			expect(ids.size).toBe(50);
+			expect([...ids].every((id) => id.length >= 8)).toBe(true);
+		} finally {
+			Object.defineProperty(crypto, "randomUUID", { value: original, configurable: true });
+		}
 	});
 });
