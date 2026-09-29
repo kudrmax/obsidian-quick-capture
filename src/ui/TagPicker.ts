@@ -54,7 +54,7 @@ export class TagPicker {
 					if (this.selected.has(tag)) this.selected.delete(tag);
 					else this.selected.add(tag);
 					button.toggleClass("is-selected", this.selected.has(tag));
-					this.onChange();
+					this.close();
 				};
 			}
 		}
