@@ -1,9 +1,11 @@
 import { Notice, setIcon } from "obsidian";
-import { CaptureError, CaptureService } from "../application/CaptureService";
+import { CaptureError, CaptureService, TargetError } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
+import { CaptureMode, modeTagGroups, modeTitle, pickMode, retainTags } from "../domain/CaptureMode";
 import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
+import { ModePicker } from "./ModePicker";
 import { hasQuickTags, TagPicker } from "./TagPicker";
 import { Waveform } from "./Waveform";
 
@@ -11,8 +13,10 @@ export interface CaptureScreenOptions {
 	service: CaptureService;
 	createRecorder: () => AudioRecorder;
 	settings: () => CaptureSettings;
+	initialModeId: string;
+	onModeChange: (id: string) => void;
 	autoFocus: boolean;
-	decorateTextInput: (textarea: HTMLTextAreaElement) => void;
+	decorateTextInput: (textarea: HTMLTextAreaElement, mode: () => CaptureMode) => void;
 	onClose: () => void;
 }
 
@@ -46,6 +50,9 @@ export class CaptureScreen {
 	private readonly waveform: Waveform;
 	private readonly selectedTags = new Set<string>();
 	private readonly tagPicker: TagPicker;
+	private readonly modePicker: ModePicker;
+	private readonly today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+	private modeId: string;
 	private readonly footerObserver: ResizeObserver;
 
 	private recorder: AudioRecorder | null = null;
@@ -57,6 +64,7 @@ export class CaptureScreen {
 	private touchStart: { x: number; y: number } | null = null;
 
 	constructor(container: HTMLElement, private readonly options: CaptureScreenOptions) {
+		this.modeId = options.initialModeId;
 		this.root = container.createDiv({ cls: "dqc-screen" });
 		this.root.addEventListener("touchstart", (event) => this.onTouchStart(event), { passive: true });
 		this.root.addEventListener("touchend", (event) => this.onTouchEnd(event), { passive: true });
@@ -66,9 +74,10 @@ export class CaptureScreen {
 		body.addEventListener("click", (event) => {
 			if (this.state === "input" && event.target !== this.textarea) this.textarea.focus();
 		});
-		this.titleEl = body.createDiv({
-			cls: "dqc-title",
-			text: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+		this.titleEl = body.createDiv({ cls: "dqc-title" });
+		this.titleEl.addEventListener("click", (event) => {
+			event.stopPropagation();
+			if (this.titleEl.hasClass("is-switchable")) this.toggleModePicker();
 		});
 		const editor = body.createDiv({ cls: "dqc-editor" });
 		this.highlightEl = editor.createDiv({ cls: "dqc-highlight", attr: { "aria-hidden": "true" } });
@@ -78,7 +87,7 @@ export class CaptureScreen {
 			this.renderControls();
 		});
 		this.textarea.addEventListener("scroll", () => (this.highlightEl.scrollTop = this.textarea.scrollTop));
-		options.decorateTextInput(this.textarea);
+		options.decorateTextInput(this.textarea, () => this.mode());
 
 		const recorderView = body.createDiv({ cls: "dqc-recorder" });
 		this.statusEl = recorderView.createDiv({ cls: "dqc-status" });
@@ -87,7 +96,7 @@ export class CaptureScreen {
 
 		const footer = this.root.createDiv({ cls: "dqc-footer" });
 		const controls = footer.createDiv({ cls: "dqc-controls" });
-		this.tagSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
+		this.tagSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side dqc-slot-tags" });
 		this.leftSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.centerSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-center" });
 		this.closeSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
@@ -96,8 +105,15 @@ export class CaptureScreen {
 		);
 		this.footerObserver.observe(footer);
 
-		this.tagPicker = new TagPicker(this.root, () => this.options.settings().tagGroups, this.selectedTags, () =>
-			this.renderControls(),
+		this.tagPicker = new TagPicker(this.root, () => this.modeTagGroups(), this.selectedTags, () => this.renderControls());
+		this.modePicker = new ModePicker(
+			this.root,
+			this.titleEl,
+			() => this.options.settings().modes,
+			() => this.mode().id,
+			(mode) => modeTitle(mode, this.today),
+			(id) => this.switchMode(id),
+			() => this.renderTitle(),
 		);
 		this.confirmEl = this.root.createDiv({ cls: "dqc-confirm" });
 		this.render();
@@ -119,6 +135,7 @@ export class CaptureScreen {
 	requestClose(): void {
 		if (this.state === "sending") return;
 		if (this.tagPicker.isOpen()) this.tagPicker.close();
+		else if (this.modePicker.isOpen()) this.modePicker.close();
 		else if (this.hasUnsentAudio()) this.showConfirm();
 		else this.options.onClose();
 	}
@@ -127,6 +144,24 @@ export class CaptureScreen {
 		this.destroyed = true;
 		this.footerObserver.disconnect();
 		this.releaseRecorder();
+	}
+
+	private mode(): CaptureMode {
+		return pickMode(this.options.settings().modes, this.modeId);
+	}
+
+	private modeTagGroups() {
+		return modeTagGroups(this.options.settings().tagGroups, this.mode());
+	}
+
+	private switchMode(id: string): void {
+		this.modeId = id;
+		const kept = retainTags(this.selectedTags, this.modeTagGroups());
+		this.selectedTags.clear();
+		kept.forEach((tag) => this.selectedTags.add(tag));
+		this.options.onModeChange(id);
+		this.renderTitle();
+		this.renderControls();
 	}
 
 	private hasUnsentAudio(): boolean {
@@ -208,23 +243,30 @@ export class CaptureScreen {
 	private async send(): Promise<void> {
 		const previous = this.state;
 		const tags = [...this.selectedTags];
+		const mode = this.mode();
 		this.sendingAudio = previous === "stopped";
 		this.tagPicker.close();
+		this.modePicker.close();
 		this.setState("sending");
 		try {
-			if (this.sendingAudio) await this.options.service.captureAudio(await this.requirePendingRecording(), tags);
-			else await this.options.service.captureText(this.textarea.value, tags);
+			if (this.sendingAudio) await this.options.service.captureAudio(mode, await this.requirePendingRecording(), tags);
+			else await this.options.service.captureText(mode, this.textarea.value, tags);
 		} catch (error) {
+			if (error instanceof TargetError) {
+				new Notice(error.message);
+				this.setState(previous);
+				return;
+			}
 			if (this.sendingAudio && error instanceof CaptureError) {
 				new Notice(error.message);
 				this.discard();
 				return;
 			}
-			new Notice(`Could not add to daily note: ${errorMessage(error)}`);
+			new Notice(`Could not add: ${errorMessage(error)}`);
 			this.setState(previous);
 			return;
 		}
-		new Notice("Added to daily note");
+		new Notice(`Added to ${modeTitle(mode, "daily note")}`);
 		this.resetAfterSend();
 	}
 
@@ -311,6 +353,7 @@ export class CaptureScreen {
 		this.root.dataset.state = this.state;
 		this.root.dataset.mode = this.isAudioMode() ? "audio" : "text";
 		this.textarea.readOnly = this.state === "sending";
+		this.renderTitle();
 		if (!this.isAudioMode()) this.renderText();
 		this.statusEl.setText(
 			{
@@ -325,6 +368,23 @@ export class CaptureScreen {
 		this.renderTimer();
 		this.renderControls();
 		window.requestAnimationFrame(() => this.waveform.draw());
+	}
+
+	private renderTitle(): void {
+		const switchable = this.options.settings().modes.length > 1;
+		this.titleEl.empty();
+		this.titleEl.appendText(modeTitle(this.mode(), this.today));
+		this.titleEl.toggleClass("is-switchable", switchable);
+		if (switchable) {
+			this.titleEl.appendText("\u00a0");
+			setIcon(this.titleEl.createSpan({ cls: "dqc-title-chevron" }), "chevron-down");
+			this.titleEl.setAttribute("role", "button");
+			this.titleEl.setAttribute("aria-label", "Change mode");
+		} else {
+			this.titleEl.removeAttribute("role");
+			this.titleEl.removeAttribute("aria-label");
+		}
+		this.titleEl.toggleClass("is-open", this.modePicker?.isOpen() ?? false);
 	}
 
 	private renderTimer(): void {
@@ -349,7 +409,7 @@ export class CaptureScreen {
 	}
 
 	private renderTagControl(): void {
-		if (!hasQuickTags(this.options.settings().tagGroups)) {
+		if (!hasQuickTags(this.modeTagGroups())) {
 			this.renderControl(this.tagSlot, null);
 			return;
 		}
@@ -368,8 +428,15 @@ export class CaptureScreen {
 	}
 
 	private toggleTagPicker(): void {
+		this.modePicker.close();
 		this.tagPicker.toggle();
 		if (this.tagPicker.isOpen()) this.textarea.blur();
+	}
+
+	private toggleModePicker(): void {
+		this.tagPicker.close();
+		this.modePicker.toggle();
+		if (this.modePicker.isOpen()) this.textarea.blur();
 	}
 
 	private controlsForState(): [ControlSpec | null, ControlSpec] {
@@ -433,7 +500,7 @@ export class CaptureScreen {
 		this.confirmEl.empty();
 		const sheet = this.confirmEl.createDiv({ cls: "dqc-confirm-sheet" });
 		sheet.createDiv({ cls: "dqc-confirm-title", text: "Discard recording?" });
-		sheet.createDiv({ cls: "dqc-confirm-text", text: "It hasn't been added to your daily note yet." });
+		sheet.createDiv({ cls: "dqc-confirm-text", text: "It hasn't been added yet." });
 		const actions = sheet.createDiv({ cls: "dqc-confirm-actions" });
 		const keep = actions.createEl("button", { cls: "dqc-pill", text: "Keep" });
 		keep.onclick = () => this.confirmEl.removeClass("is-open");

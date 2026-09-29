@@ -228,6 +228,11 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 	display: none;
 }
 
+.dqc-slot-tags:empty {
+	display: block;
+	width: var(--dqc-secondary-size);
+}
+
 .dqc-slot-center {
 	min-width: var(--dqc-primary-size);
 	min-height: var(--dqc-primary-size);
@@ -511,4 +516,112 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 .dqc-tag-row-preview svg {
 	width: 18px;
 	height: 18px;
+}
+
+.dqc-title.is-switchable {
+	position: relative;
+	z-index: 3;
+	align-self: center;
+	padding: 2px 10px;
+	border-radius: var(--radius-l);
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition: background-color 150ms ease;
+}
+
+.dqc-title.is-switchable:active,
+.dqc-title.is-open {
+	background: var(--background-modifier-hover);
+}
+
+.dqc-title-chevron {
+	display: inline-block;
+	color: var(--text-muted);
+	vertical-align: -0.05em;
+	transition: transform 200ms ease;
+}
+
+.dqc-title-chevron svg {
+	width: 0.7em;
+	height: 0.7em;
+}
+
+.dqc-title.is-open .dqc-title-chevron {
+	transform: rotate(180deg);
+}
+
+.dqc-modes {
+	position: absolute;
+	z-index: 2;
+	inset: 0 0 var(--dqc-footer-height, 140px);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: calc(var(--dqc-modes-top, 40%) + 8px) 20px 8px;
+	overflow-y: auto;
+	background: color-mix(in srgb, var(--background-primary) 65%, transparent);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 200ms ease;
+}
+
+.dqc-screen.is-picking-mode .dqc-modes {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.dqc-screen.is-picking-mode .dqc-body {
+	pointer-events: none;
+}
+
+.dqc-screen.is-picking-mode .dqc-title {
+	pointer-events: auto;
+}
+
+.dqc-modes-list {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 2px;
+	min-width: min(260px, 100%);
+	max-width: 100%;
+	padding: 6px;
+	border-radius: 18px;
+	background: var(--background-secondary);
+	box-shadow: var(--shadow-l);
+}
+
+button.dqc-mode {
+	height: auto;
+	padding: 8px 16px;
+	border: none;
+	border-radius: var(--radius-l);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 19px;
+	font-weight: var(--font-semibold);
+	line-height: 1.3;
+	white-space: normal;
+	cursor: pointer;
+}
+
+button.dqc-mode:active {
+	background: var(--background-modifier-hover);
+}
+
+button.dqc-mode.is-current {
+	color: var(--text-normal);
+}
+
+button.dqc-mode.is-current::after {
+	content: " ✓";
+	color: var(--interactive-accent);
+}
+
+.dqc-mode-setting {
+	margin: 8px 0 16px;
+	padding: 0 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
 }

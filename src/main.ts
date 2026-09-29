@@ -4,6 +4,7 @@ import { systemClock } from "./domain/Clock";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
 import { ObsidianAttachments } from "./infrastructure/ObsidianAttachments";
 import { ObsidianDailyNotes } from "./infrastructure/ObsidianDailyNotes";
+import { ObsidianNoteTargets } from "./infrastructure/ObsidianNoteTargets";
 import { ObsidianNoteWriter } from "./infrastructure/ObsidianNoteWriter";
 import { CaptureSettings, loadSettings } from "./settings";
 import { CaptureModal } from "./ui/CaptureModal";
@@ -16,8 +17,9 @@ export default class DailyQuickCapturePlugin extends Plugin implements SettingsH
 		this.settings = loadSettings(await this.loadData());
 
 		const dailyNotes = new ObsidianDailyNotes(this.app, systemClock, (message) => new Notice(message));
+		const targets = new ObsidianNoteTargets(this.app, dailyNotes);
 		const service = new CaptureService({
-			dailyNotes,
+			targets,
 			notes: new ObsidianNoteWriter(this.app),
 			attachments: new ObsidianAttachments(this.app),
 			clock: systemClock,
@@ -28,7 +30,12 @@ export default class DailyQuickCapturePlugin extends Plugin implements SettingsH
 				service,
 				createRecorder: () => new MediaAudioRecorder(),
 				settings: () => this.settings,
-				linkSourcePath: () => dailyNotes.todayPath(),
+				modeId: this.settings.lastModeId,
+				onModeChange: (id) => {
+					this.settings.lastModeId = id;
+					void this.saveSettings();
+				},
+				linkSourcePath: (mode) => targets.previewPath(mode.target),
 			}).open();
 
 		this.addRibbonIcon("mic", "Open quick capture", openCapture);
