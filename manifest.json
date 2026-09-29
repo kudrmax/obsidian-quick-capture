@@ -1,0 +1,10 @@
+{
+  "id": "daily-quick-capture",
+  "name": "Daily Quick Capture",
+  "version": "0.1.0",
+  "minAppVersion": "1.6.6",
+  "description": "Fullscreen quick capture of text and voice into today's daily note.",
+  "author": "kudrmax",
+  "authorUrl": "https://github.com/kudrmax",
+  "isDesktopOnly": false
+}
