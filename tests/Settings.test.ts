@@ -1,22 +1,80 @@
 import { describe, expect, it } from "vitest";
+import { NO_OVERRIDES } from "../src/domain/CaptureMode";
 import { DEFAULT_SETTINGS, loadSettings } from "../src/settings";
 
+const LEGACY = {
+	heading: "Дневник",
+	textPrefix: "- {{time}}. ",
+	textSuffix: "",
+	audioPrefix: "- {{time}}. ",
+	audioSuffix: " #transcribe",
+	embedAudio: false,
+	afterSend: "stay",
+	tagGroups: [
+		{
+			name: "Daily",
+			tags: [
+				{ tag: "#like", icon: "thumbs-up" },
+				{ tag: "#dislike", icon: "thumbs-down" },
+			],
+		},
+	],
+};
+
 describe("loadSettings", () => {
-	it("fills missing values with defaults", () => {
-		expect(loadSettings({ heading: "Journal" })).toEqual({ ...DEFAULT_SETTINGS, heading: "Journal" });
+	it("starts with one daily mode and no tag groups", () => {
+		const settings = loadSettings(null);
+		expect(settings.defaults).toEqual(DEFAULT_SETTINGS.defaults);
+		expect(settings.tagGroups).toEqual([]);
+		expect(settings.modes).toEqual([
+			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: [] },
+		]);
+		expect(settings.lastModeId).toBe("daily");
 	});
 
-	it("starts without tag groups when none are saved", () => {
-		expect(loadSettings(null).tagGroups).toEqual([]);
+	it("moves legacy settings into defaults and a daily mode with every tag group", () => {
+		const settings = loadSettings(LEGACY);
+		expect(settings.defaults).toEqual({
+			heading: "Дневник",
+			headingLevel: 2,
+			textPrefix: "- {{time}}. ",
+			textSuffix: "",
+			audioPrefix: "- {{time}}. ",
+			audioSuffix: " #transcribe",
+		});
+		expect(settings.embedAudio).toBe(false);
+		expect(settings.afterSend).toBe("stay");
+		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0] }]);
+		expect(settings.modes).toEqual([
+			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: ["group-1"] },
+		]);
+		expect(settings.lastModeId).toBe("daily");
+		expect(settings).not.toHaveProperty("heading");
 	});
 
-	it("never shares the default tag group list between loads", () => {
-		loadSettings(undefined).tagGroups.push({ name: "Books", tags: [] });
-		expect(loadSettings(undefined).tagGroups).toEqual([]);
+	it("turns hashes of a legacy heading into its level", () => {
+		const defaults = loadSettings({ ...LEGACY, heading: "### Дневник" }).defaults;
+		expect(defaults.heading).toBe("Дневник");
+		expect(defaults.headingLevel).toBe(3);
 	});
 
-	it("keeps saved tag groups", () => {
-		const tagGroups = [{ name: "Books", tags: [{ tag: "#book/quote", icon: "quote" }] }];
-		expect(loadSettings({ tagGroups }).tagGroups).toEqual(tagGroups);
+	it("fills legacy values that were never saved", () => {
+		expect(loadSettings({ heading: "Journal" }).defaults).toEqual({ ...DEFAULT_SETTINGS.defaults, heading: "Journal" });
+	});
+
+	it("keeps settings saved in the current format", () => {
+		const saved = loadSettings(LEGACY);
+		saved.modes.push({ id: "book", title: "Book", target: { type: "file", path: "B.md" }, overrides: NO_OVERRIDES, tagGroupIds: [] });
+		saved.lastModeId = "book";
+		expect(loadSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+	});
+
+	it("never shares lists between loads", () => {
+		const first = loadSettings(undefined);
+		first.tagGroups.push({ id: "x", name: "Books", tags: [] });
+		first.modes[0].tagGroupIds.push("x");
+		const second = loadSettings(undefined);
+		expect(second.tagGroups).toEqual([]);
+		expect(second.modes[0].tagGroupIds).toEqual([]);
 	});
 });
