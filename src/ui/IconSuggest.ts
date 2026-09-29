@@ -1,10 +1,12 @@
 import { AbstractInputSuggest, App, getIconIds, setIcon } from "obsidian";
+import { IconSearch } from "../domain/IconSearch";
+import lucideKeywords from "./lucide-keywords.json";
 
 const LUCIDE_PREFIX = "lucide-";
 const SUGGESTION_LIMIT = 50;
 
 export class IconSuggest extends AbstractInputSuggest<string> {
-	private iconNames: string[] | null = null;
+	private search: IconSearch | null = null;
 
 	constructor(
 		app: App,
@@ -16,8 +18,11 @@ export class IconSuggest extends AbstractInputSuggest<string> {
 	}
 
 	protected override getSuggestions(query: string): string[] {
-		const needle = query.trim().toLowerCase();
-		return this.names().filter((name) => name.includes(needle));
+		this.search ??= new IconSearch(
+			getIconIds().map((id) => (id.startsWith(LUCIDE_PREFIX) ? id.slice(LUCIDE_PREFIX.length) : id)),
+			lucideKeywords,
+		);
+		return this.search.find(query);
 	}
 
 	override renderSuggestion(icon: string, el: HTMLElement): void {
@@ -30,12 +35,5 @@ export class IconSuggest extends AbstractInputSuggest<string> {
 		this.input.value = icon;
 		this.onPick(icon);
 		this.close();
-	}
-
-	private names(): string[] {
-		this.iconNames ??= [
-			...new Set(getIconIds().map((id) => (id.startsWith(LUCIDE_PREFIX) ? id.slice(LUCIDE_PREFIX.length) : id))),
-		].sort();
-		return this.iconNames;
 	}
 }
