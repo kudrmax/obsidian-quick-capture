@@ -2,53 +2,58 @@ import { TagGroup } from "../settings";
 import { renderTagLabel } from "./TagIcon";
 
 export class TagPicker {
-	private readonly overlayEl: HTMLElement;
-	private readonly sheetEl: HTMLElement;
+	private readonly layerEl: HTMLElement;
 
 	constructor(
-		container: HTMLElement,
+		private readonly screenEl: HTMLElement,
 		private readonly groups: () => TagGroup[],
 		private readonly selected: Set<string>,
 		private readonly onChange: () => void,
 	) {
-		this.overlayEl = container.createDiv({ cls: "dqc-tags" });
-		this.overlayEl.addEventListener("click", (event) => {
-			if (event.target === this.overlayEl) this.close();
+		this.layerEl = screenEl.createDiv({ cls: "dqc-tags" });
+		this.layerEl.addEventListener("click", (event) => {
+			if (!(event.target as HTMLElement).closest("button")) this.close();
 		});
-		this.sheetEl = this.overlayEl.createDiv({ cls: "dqc-tags-sheet" });
 	}
 
 	isOpen(): boolean {
-		return this.overlayEl.hasClass("is-open");
+		return this.screenEl.hasClass("is-picking-tags");
+	}
+
+	toggle(): void {
+		if (this.isOpen()) this.close();
+		else this.open();
 	}
 
 	open(): void {
 		this.render();
-		this.overlayEl.addClass("is-open");
+		this.screenEl.addClass("is-picking-tags");
+		this.onChange();
 	}
 
 	close(): void {
-		this.overlayEl.removeClass("is-open");
+		if (!this.isOpen()) return;
+		this.screenEl.removeClass("is-picking-tags");
+		this.onChange();
 	}
 
 	private render(): void {
-		this.sheetEl.empty();
-		this.sheetEl.createDiv({ cls: "dqc-tags-grabber" });
+		this.layerEl.empty();
 		for (const group of this.groups()) {
 			const tags = group.tags.filter((quickTag) => quickTag.tag.trim() !== "");
 			if (tags.length === 0) continue;
-			const groupEl = this.sheetEl.createDiv({ cls: "dqc-tags-group" });
+			const groupEl = this.layerEl.createDiv({ cls: "dqc-tags-group" });
 			if (group.name.trim() !== "") groupEl.createDiv({ cls: "dqc-tags-group-name", text: group.name });
-			const chips = groupEl.createDiv({ cls: "dqc-tags-chips" });
+			const row = groupEl.createDiv({ cls: "dqc-tags-row" });
 			for (const quickTag of tags) {
 				const tag = quickTag.tag.trim();
-				const chip = chips.createEl("button", { cls: "dqc-tag-chip", attr: { "aria-label": tag, title: tag } });
-				chip.toggleClass("is-icon", renderTagLabel(chip, tag, quickTag.icon));
-				chip.toggleClass("is-selected", this.selected.has(tag));
-				chip.onclick = () => {
+				const button = row.createEl("button", { cls: "dqc-tag", attr: { "aria-label": tag, title: tag } });
+				button.toggleClass("is-text", !renderTagLabel(button, tag, quickTag.icon));
+				button.toggleClass("is-selected", this.selected.has(tag));
+				button.onclick = () => {
 					if (this.selected.has(tag)) this.selected.delete(tag);
 					else this.selected.add(tag);
-					chip.toggleClass("is-selected", this.selected.has(tag));
+					button.toggleClass("is-selected", this.selected.has(tag));
 					this.onChange();
 				};
 			}

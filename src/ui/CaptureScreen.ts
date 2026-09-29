@@ -87,10 +87,10 @@ export class CaptureScreen {
 
 		const footer = this.root.createDiv({ cls: "dqc-footer" });
 		const controls = footer.createDiv({ cls: "dqc-controls" });
-		this.closeSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.tagSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.leftSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.centerSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-center" });
+		this.closeSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-side" });
 		this.footerObserver = new ResizeObserver(() =>
 			this.root.style.setProperty("--dqc-footer-height", `${footer.offsetHeight}px`),
 		);
@@ -355,16 +355,21 @@ export class CaptureScreen {
 		}
 		const count = this.selectedTags.size;
 		this.renderControl(this.tagSlot, {
-			icon: "hash",
+			icon: this.tagPicker.isOpen() ? "chevron-down" : "hash",
 			label: count > 0 ? `Tags (${count})` : "Tags",
 			tone: "secondary",
-			onClick: () => this.tagPicker.open(),
+			onClick: () => this.toggleTagPicker(),
 			disabled: this.state === "sending",
 		});
 		const button = this.tagSlot.querySelector("button");
 		if (!button) return;
 		if (count > 0) button.dataset.count = String(count);
 		else delete button.dataset.count;
+	}
+
+	private toggleTagPicker(): void {
+		if (!this.tagPicker.isOpen()) this.textarea.blur();
+		this.tagPicker.toggle();
 	}
 
 	private controlsForState(): [ControlSpec | null, ControlSpec] {
