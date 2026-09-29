@@ -12,34 +12,51 @@ interface SplitNote {
 const HEADING = /^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
 const FENCE = /^[ \t]*(```|~~~)/;
 const BYTE_ORDER_MARK = "\uFEFF";
-const DEFAULT_HEADING_MARK = "##";
 
-export function insertIntoSection(note: string, heading: string, entry: string): string {
-	const target = parseHeadingSetting(heading);
-	const entryLines = entry.split(/\r?\n/);
-	if (note === "") return (target ? [target.line, ...entryLines] : entryLines).join("\n");
-
-	const { lines, separators } = splitNote(note);
-	const headings = findHeadings(lines);
-	const match = target ? headings.find((h) => h.text.trim().toLowerCase() === target.key) : undefined;
-	if (match) return insertLines(lines, separators, sectionInsertIndex(lines, headings, match), entryLines);
-
-	const insertAt = endInsertIndex(lines);
-	if (!target) return insertLines(lines, separators, insertAt, entryLines);
-	const spacer = insertAt > 0 && lines[insertAt - 1].trim() !== "" ? [""] : [];
-	return insertLines(lines, separators, insertAt, [...spacer, target.line, ...entryLines]);
+export interface HeadingTarget {
+	text: string;
+	level: number;
 }
 
-interface HeadingSetting {
-	key: string;
-	line: string;
-}
-
-function parseHeadingSetting(heading: string): HeadingSetting | null {
+export function parseHeading(heading: string, fallbackLevel: number): HeadingTarget | null {
 	const match = /^\s*(#{1,6})?\s*(.*?)\s*$/.exec(heading);
 	const text = match?.[2] ?? "";
 	if (text === "") return null;
-	return { key: text.toLowerCase(), line: `${match?.[1] ?? DEFAULT_HEADING_MARK} ${text}` };
+	return { text, level: match?.[1]?.length ?? fallbackLevel };
+}
+
+export function insertIntoSection(note: string, heading: HeadingTarget | null, entry: string): string {
+	const entryLines = entry.split(/\r?\n/);
+	const headingLines = heading ? [`${"#".repeat(heading.level)} ${heading.text}`, ""] : [];
+	if (note === "") return [...headingLines, ...entryLines].join("\n");
+
+	const { lines, separators } = splitNote(note);
+	const headings = findHeadings(lines);
+	const key = heading?.text.toLowerCase();
+	const match = headings.find((h) => h.text.trim().toLowerCase() === key);
+	if (match) return insertIntoMatchedSection(lines, separators, headings, match, entryLines);
+
+	const insertAt = endInsertIndex(lines);
+	if (!heading) return insertLines(lines, separators, insertAt, entryLines);
+	const spacer = insertAt > 0 && lines[insertAt - 1].trim() !== "" ? [""] : [];
+	return insertLines(lines, separators, insertAt, [...spacer, ...headingLines, ...entryLines]);
+}
+
+function insertIntoMatchedSection(
+	lines: string[],
+	separators: string[],
+	headings: Heading[],
+	match: Heading,
+	entryLines: string[],
+): string {
+	const next = headings.find((h) => h.line > match.line && h.level <= match.level);
+	const sectionEnd = next ? next.line : endInsertIndex(lines);
+	for (let i = sectionEnd - 1; i > match.line; i--) {
+		if (lines[i].trim() !== "") return insertLines(lines, separators, i + 1, entryLines);
+	}
+	const afterHeading = match.line + 1;
+	if (afterHeading < sectionEnd) return insertLines(lines, separators, afterHeading + 1, entryLines);
+	return insertLines(lines, separators, afterHeading, ["", ...entryLines]);
 }
 
 function insertLines(lines: string[], separators: string[], insertAt: number, inserted: string[]): string {
@@ -47,15 +64,6 @@ function insertLines(lines: string[], separators: string[], insertAt: number, in
 	lines.splice(insertAt, 0, ...inserted);
 	separators.splice(insertAt, 0, ...inserted.map(() => separator));
 	return joinNote(lines, separators);
-}
-
-function sectionInsertIndex(lines: string[], headings: Heading[], match: Heading): number {
-	const next = headings.find((h) => h.line > match.line && h.level <= match.level);
-	const sectionEnd = next ? next.line : lines.length;
-	for (let i = sectionEnd - 1; i > match.line; i--) {
-		if (lines[i].trim() !== "") return i + 1;
-	}
-	return match.line + 1;
 }
 
 function endInsertIndex(lines: string[]): number {

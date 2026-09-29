@@ -1,17 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { CaptureError, CaptureService } from "../src/application/CaptureService";
-import { AttachmentStore, DailyNoteGateway, NoteWriter } from "../src/application/ports";
+import { CaptureError, CaptureService, TargetError } from "../src/application/CaptureService";
+import { AttachmentStore, NoteTargets, NoteWriter } from "../src/application/ports";
+import { CaptureMode, EntryFormat, ModeTarget, NO_OVERRIDES } from "../src/domain/CaptureMode";
 import { CaptureSettings, DEFAULT_SETTINGS } from "../src/settings";
 
 const NOTE = "Daily/2026-09-29.md";
 
-class FakeNotes implements DailyNoteGateway, NoteWriter {
+class FakeNotes implements NoteTargets, NoteWriter {
 	files = new Map<string, string>();
 	failWrites = false;
 
-	async getOrCreateToday(): Promise<string> {
-		if (!this.files.has(NOTE)) this.files.set(NOTE, "");
-		return NOTE;
+	async resolve(target: ModeTarget): Promise<string> {
+		const path = target.type === "daily" ? NOTE : target.path;
+		if (!this.files.has(path)) this.files.set(path, "");
+		return path;
 	}
 
 	async update(path: string, transform: (content: string) => string): Promise<void> {
@@ -22,11 +24,13 @@ class FakeNotes implements DailyNoteGateway, NoteWriter {
 
 class FakeAttachments implements AttachmentStore {
 	saved: string[] = [];
+	savedFor: string[] = [];
 	discarded: string[] = [];
 
-	async save(fileName: string) {
+	async save(fileName: string, _data: ArrayBuffer, notePath: string) {
 		const path = `Files/${fileName}`;
 		this.saved.push(path);
+		this.savedFor.push(notePath);
 		return { path, link: `[[${fileName}]]` };
 	}
 
@@ -35,12 +39,21 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-function setup(overrides: Partial<CaptureSettings> = {}) {
+const DAILY: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: [] };
+const BOOK: CaptureMode = {
+	id: "book",
+	title: "Book",
+	target: { type: "file", path: "Books/Book.md" },
+	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " },
+	tagGroupIds: [],
+};
+
+function setup(format: Partial<EntryFormat> = {}, other: Partial<CaptureSettings> = {}) {
 	const notes = new FakeNotes();
 	const attachments = new FakeAttachments();
-	const settings = { ...DEFAULT_SETTINGS, ...overrides };
+	const settings: CaptureSettings = { ...DEFAULT_SETTINGS, ...other, defaults: { ...DEFAULT_SETTINGS.defaults, ...format } };
 	const service = new CaptureService({
-		dailyNotes: notes,
+		targets: notes,
 		notes,
 		attachments,
 		clock: { now: () => new Date(2026, 8, 29, 21, 37, 5) },
@@ -54,69 +67,94 @@ const audio = { data: new Uint8Array([1, 2]).buffer, extension: "m4a", durationM
 describe("CaptureService", () => {
 	it("appends formatted text to today's note", async () => {
 		const { notes, service } = setup({ textSuffix: " #inbox" });
-		await service.captureText("milk");
+		await service.captureText(DAILY, "milk");
 		expect(notes.files.get(NOTE)).toBe("- 21:37 milk #inbox");
 	});
 
 	it("rejects blank text", async () => {
 		const { service } = setup();
-		await expect(service.captureText("  \n")).rejects.toBeInstanceOf(CaptureError);
+		await expect(service.captureText(DAILY, "  \n")).rejects.toBeInstanceOf(CaptureError);
 	});
 
 	it("saves audio and embeds it with the audio template", async () => {
 		const { notes, attachments, service } = setup({ audioSuffix: " #transcribe" });
-		await service.captureAudio(audio);
+		await service.captureAudio(DAILY, audio);
 		expect(attachments.saved).toEqual(["Files/Recording 20260929213705.m4a"]);
 		expect(notes.files.get(NOTE)).toBe("- 21:37 ![[Recording 20260929213705.m4a]] #transcribe");
 	});
 
 	it("links audio without embedding when configured", async () => {
-		const { notes, service } = setup({ embedAudio: false });
-		await service.captureAudio(audio);
+		const { notes, service } = setup({}, { embedAudio: false });
+		await service.captureAudio(DAILY, audio);
 		expect(notes.files.get(NOTE)).toBe("- 21:37 [[Recording 20260929213705.m4a]]");
 	});
 
 	it("rejects an empty recording without touching files", async () => {
 		const { attachments, service } = setup();
-		await expect(service.captureAudio({ data: new ArrayBuffer(0), extension: "m4a", durationMs: 4000 })).rejects.toThrow("Recording is empty");
+		await expect(service.captureAudio(DAILY, { data: new ArrayBuffer(0), extension: "m4a", durationMs: 4000 })).rejects.toThrow(
+			"Recording is empty",
+		);
 		expect(attachments.saved).toEqual([]);
 	});
 
 	it("discards the saved file when writing the note fails", async () => {
 		const { notes, attachments, service } = setup();
 		notes.failWrites = true;
-		await expect(service.captureAudio(audio)).rejects.toThrow("disk full");
+		await expect(service.captureAudio(DAILY, audio)).rejects.toThrow("disk full");
 		expect(attachments.discarded).toEqual(["Files/Recording 20260929213705.m4a"]);
 	});
 
 	it("treats a recording shorter than half a second as empty", async () => {
 		const { attachments, service } = setup();
-		await expect(service.captureAudio({ ...audio, durationMs: 200 })).rejects.toThrow("Recording is empty");
+		await expect(service.captureAudio(DAILY, { ...audio, durationMs: 200 })).rejects.toThrow("Recording is empty");
 		expect(attachments.saved).toEqual([]);
 	});
 
 	it("drops trailing line breaks and spaces from text", async () => {
 		const { notes, service } = setup();
-		await service.captureText("milk\n\n  ");
+		await service.captureText(DAILY, "milk\n\n  ");
 		expect(notes.files.get(NOTE)).toBe("- 21:37 milk");
 	});
 
-	it("writes under the configured heading, creating it when missing", async () => {
-		const { notes, service } = setup({ heading: "### Дневник" });
-		await service.captureText("first");
-		await service.captureText("second");
-		expect(notes.files.get(NOTE)).toBe("### Дневник\n- 21:37 first\n- 21:37 second");
+	it("writes under the configured heading and level, creating it when missing", async () => {
+		const { notes, service } = setup({ heading: "Дневник", headingLevel: 3 });
+		await service.captureText(DAILY, "first");
+		await service.captureText(DAILY, "second");
+		expect(notes.files.get(NOTE)).toBe("### Дневник\n\n- 21:37 first\n- 21:37 second");
 	});
 
 	it("adds selected tags to a text entry before the suffix", async () => {
 		const { notes, service } = setup({ textSuffix: " #inbox" });
-		await service.captureText("milk", ["#analyze/нравится"]);
+		await service.captureText(DAILY, "milk", ["#analyze/нравится"]);
 		expect(notes.files.get(NOTE)).toBe("- 21:37 milk #analyze/нравится #inbox");
 	});
 
 	it("adds selected tags to an audio entry before the suffix", async () => {
 		const { notes, service } = setup({ audioSuffix: " #transcribe" });
-		await service.captureAudio(audio, ["#idea", "#book"]);
+		await service.captureAudio(DAILY, audio, ["#idea", "#book"]);
 		expect(notes.files.get(NOTE)).toBe("- 21:37 ![[Recording 20260929213705.m4a]] #idea #book #transcribe");
+	});
+
+	it("writes text to the mode's file with the mode's own format", async () => {
+		const { notes, service } = setup({ heading: "Дневник" });
+		await service.captureText(BOOK, "Рукописи не горят");
+		expect(notes.files.get("Books/Book.md")).toBe("## Цитаты\n\n> Рукописи не горят");
+		expect(notes.files.has(NOTE)).toBe(false);
+	});
+
+	it("saves audio next to the mode's file", async () => {
+		const { notes, attachments, service } = setup({ heading: "" });
+		await service.captureAudio(BOOK, audio);
+		expect(attachments.savedFor).toEqual(["Books/Book.md"]);
+		expect(notes.files.get("Books/Book.md")).toBe("## Цитаты\n\n- 21:37 ![[Recording 20260929213705.m4a]]");
+	});
+
+	it("refuses a file mode without a file before touching anything", async () => {
+		const { notes, attachments, service } = setup();
+		const noFile: CaptureMode = { ...BOOK, target: { type: "file", path: "" } };
+		await expect(service.captureAudio(noFile, audio)).rejects.toBeInstanceOf(TargetError);
+		await expect(service.captureText(noFile, "milk")).rejects.toThrow('Choose a file for mode "Book"');
+		expect(attachments.saved).toEqual([]);
+		expect(notes.files.size).toBe(0);
 	});
 });

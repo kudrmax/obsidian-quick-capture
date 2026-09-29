@@ -1,5 +1,7 @@
-export interface DailyNoteGateway {
-	getOrCreateToday(): Promise<string>;
+import { ModeTarget } from "../domain/CaptureMode";
+
+export interface NoteTargets {
+	resolve(target: ModeTarget): Promise<string>;
 }
 
 export interface NoteWriter {

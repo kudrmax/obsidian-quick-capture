@@ -6,21 +6,23 @@ export interface EntryTemplate {
 }
 
 const TIME_PLACEHOLDER = "{{time}}";
+const DATE_PLACEHOLDER = "{{date}}";
 
 export class EntryFormatter {
 	constructor(private readonly clock: Clock) {}
 
 	format(template: EntryTemplate, content: string, tags: readonly string[] = []): string {
-		const time = this.currentTime();
-		const expand = (part: string) => part.split(TIME_PLACEHOLDER).join(time);
+		const now = this.clock.now();
+		const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+		const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+		const expand = (part: string) => part.split(TIME_PLACEHOLDER).join(time).split(DATE_PLACEHOLDER).join(date);
 		const tagPart = normalizeTags(tags).map((tag) => ` ${tag}`).join("");
 		return expand(template.prefix) + content + tagPart + expand(template.suffix);
 	}
+}
 
-	private currentTime(): string {
-		const now = this.clock.now();
-		return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-	}
+function pad(value: number): string {
+	return String(value).padStart(2, "0");
 }
 
 function normalizeTags(tags: readonly string[]): string[] {
