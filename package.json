@@ -1,6 +1,6 @@
 {
-  "name": "obsidian-daily-quick-capture",
-  "version": "0.1.0",
+  "name": "obsidian-quick-capture",
+  "version": "0.2.0",
   "private": true,
   "main": "main.js",
   "scripts": {

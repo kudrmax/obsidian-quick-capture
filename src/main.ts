@@ -1,6 +1,7 @@
 import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
 import { systemClock } from "./domain/Clock";
+import { modeTitle } from "./domain/CaptureMode";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
 import { ObsidianAttachments } from "./infrastructure/ObsidianAttachments";
 import { ObsidianDailyNotes } from "./infrastructure/ObsidianDailyNotes";
@@ -10,8 +11,12 @@ import { CaptureSettings, loadSettings } from "./settings";
 import { CaptureModal } from "./ui/CaptureModal";
 import { SettingsHost, SettingsTab } from "./ui/SettingsTab";
 
-export default class DailyQuickCapturePlugin extends Plugin implements SettingsHost {
+const MODE_COMMAND_PREFIX = "capture-";
+
+export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 	override settings: CaptureSettings = loadSettings(null);
+	private openCapture: (modeId: string) => void = () => {};
+	private modeCommandIds: string[] = [];
 
 	override async onload(): Promise<void> {
 		this.settings = loadSettings(await this.loadData());
@@ -25,25 +30,43 @@ export default class DailyQuickCapturePlugin extends Plugin implements SettingsH
 			clock: systemClock,
 			settings: () => this.settings,
 		});
-		const openCapture = () =>
+		this.openCapture = (modeId) =>
 			new CaptureModal(this.app, {
 				service,
 				createRecorder: () => new MediaAudioRecorder(),
 				settings: () => this.settings,
-				modeId: this.settings.lastModeId,
+				modeId,
 				onModeChange: (id) => {
 					this.settings.lastModeId = id;
 					void this.saveSettings();
 				},
 				linkSourcePath: (mode) => targets.previewPath(mode.target),
 			}).open();
+		const openLast = () => this.openCapture(this.settings.lastModeId);
 
-		this.addRibbonIcon("mic", "Open quick capture", openCapture);
-		this.addCommand({ id: "open", name: "Open quick capture", callback: openCapture });
+		this.addRibbonIcon("mic", "Open quick capture", openLast);
+		this.addCommand({ id: "open", name: "Open quick capture", callback: openLast });
+		this.syncModeCommands();
 		this.addSettingTab(new SettingsTab(this.app, this));
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		this.syncModeCommands();
+	}
+
+	private syncModeCommands(): void {
+		for (const id of this.modeCommandIds) this.removeModeCommand(id);
+		this.modeCommandIds = this.settings.modes.map((mode) => {
+			const id = `${MODE_COMMAND_PREFIX}${mode.id}`;
+			this.addCommand({ id, name: `Capture to ${modeTitle(mode, "daily note")}`, callback: () => this.openCapture(mode.id) });
+			return id;
+		});
+	}
+
+	private removeModeCommand(id: string): void {
+		const remove = (this as Partial<Pick<Plugin, "removeCommand">>).removeCommand;
+		if (remove) remove.call(this, id);
+		else (this.app as unknown as { commands: { removeCommand(id: string): void } }).commands.removeCommand(`${this.manifest.id}:${id}`);
 	}
 }
