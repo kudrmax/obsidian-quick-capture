@@ -1,4 +1,5 @@
 import { AudioRecording } from "../application/ports";
+import { RecordingClock } from "../domain/RecordingClock";
 
 export interface AudioRecorder {
 	start(): Promise<void>;
@@ -7,6 +8,7 @@ export interface AudioRecorder {
 	stop(): Promise<AudioRecording>;
 	cancel(): void;
 	level(): number;
+	elapsedMs(): number;
 }
 
 interface AudioFormat {
@@ -30,8 +32,7 @@ export class MediaAudioRecorder implements AudioRecorder {
 	private readonly samples = new Float32Array(1024);
 	private chunks: Blob[] = [];
 	private extension = "webm";
-	private recordedMs = 0;
-	private segmentStartedAt: number | null = null;
+	private readonly clock = new RecordingClock(() => performance.now());
 
 	async start(): Promise<void> {
 		if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -45,29 +46,31 @@ export class MediaAudioRecorder implements AudioRecorder {
 		this.recorder.addEventListener("dataavailable", (event) => {
 			if (event.data.size > 0) this.chunks.push(event.data);
 		});
-		this.startLevelMeter(this.stream);
 		this.recorder.start(CHUNK_INTERVAL_MS);
-		this.recordedMs = 0;
-		this.segmentStartedAt = performance.now();
+		this.clock.start();
+		const stream = this.stream;
+		window.setTimeout(() => {
+			if (this.stream === stream) this.startLevelMeter(stream);
+		}, 0);
 	}
 
 	pause(): void {
 		if (this.recorder?.state !== "recording") return;
 		this.recorder.pause();
-		this.closeSegment();
+		this.clock.pause();
 	}
 
 	resume(): void {
 		if (this.recorder?.state !== "paused") return;
 		this.recorder.resume();
-		this.segmentStartedAt = performance.now();
+		this.clock.resume();
 	}
 
 	stop(): Promise<AudioRecording> {
 		const recorder = this.recorder;
 		if (!recorder) return Promise.reject(new Error("recording has not started"));
-		this.closeSegment();
-		const durationMs = this.recordedMs;
+		this.clock.pause();
+		const durationMs = this.clock.elapsedMs();
 		return new Promise((resolve, reject) => {
 			recorder.addEventListener(
 				"stop",
@@ -97,18 +100,16 @@ export class MediaAudioRecorder implements AudioRecorder {
 		return Math.min(1, Math.sqrt(rms) * 2.2);
 	}
 
+	elapsedMs(): number {
+		return this.clock.elapsedMs();
+	}
+
 	private startLevelMeter(stream: MediaStream): void {
 		this.context = new AudioContext();
 		this.analyser = this.context.createAnalyser();
 		this.analyser.fftSize = this.samples.length;
 		this.context.createMediaStreamSource(stream).connect(this.analyser);
 		void this.context.resume();
-	}
-
-	private closeSegment(): void {
-		if (this.segmentStartedAt === null) return;
-		this.recordedMs += performance.now() - this.segmentStartedAt;
-		this.segmentStartedAt = null;
 	}
 
 	private release(): void {
