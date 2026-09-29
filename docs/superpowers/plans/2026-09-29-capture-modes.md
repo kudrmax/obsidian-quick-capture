@@ -62,13 +62,14 @@ export interface EntryFormat { heading: string; headingLevel: number; textPrefix
 export type HeadingLevelChoice = "default" | "none" | number;
 export interface FormatOverrides { heading: string; headingLevel: HeadingLevelChoice; textPrefix: string; textSuffix: string; audioPrefix: string; audioSuffix: string; }
 export type ModeTarget = { type: "daily" } | { type: "file"; path: string };
-export interface CaptureMode { id: string; name: string; target: ModeTarget; overrides: FormatOverrides; tagGroupIds: string[]; }
+export interface CaptureMode { id: string; title: string; target: ModeTarget; overrides: FormatOverrides; tagGroupIds: string[]; }
 export interface ResolvedFormat { heading: HeadingTarget | null; text: EntryTemplate; audio: EntryTemplate; }
 export const NO_OVERRIDES: FormatOverrides; // всё "" и headingLevel "default"
 export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides): ResolvedFormat;
 export function modeTagGroups<G extends { id: string }>(groups: G[], mode: CaptureMode): G[]; // порядок групп из настроек
 export function pickMode(modes: CaptureMode[], id: string): CaptureMode; // fallback modes[0]
-export function targetProblem(mode: CaptureMode): string | null; // "Choose a file for mode \"<name>\"" если file и путь пуст или не *.md
+export function targetProblem(mode: CaptureMode): string | null; // "Choose a file for mode \"<title>\"" если file и путь пуст или не *.md
+export function modeTitle(mode: CaptureMode, today: string): string; // daily без title → today; иначе title.trim() || "Untitled mode"
 export function retainTags(selected: Iterable<string>, groups: { tags: { tag: string }[] }[]): string[];
 ```
 - Produces (в `src/settings.ts`): `TagGroup { id; name; tags }`, `CaptureSettings { defaults: EntryFormat; embedAudio; afterSend; tagGroups: TagGroup[]; modes: CaptureMode[]; lastModeId: string }`, `loadSettings(saved: unknown): CaptureSettings` с миграцией старого формата, `newId(): string` (`crypto.randomUUID()`).
@@ -79,7 +80,8 @@ export function retainTags(selected: Iterable<string>, groups: { tags: { tag: st
   - `pickMode`: по id; неизвестный id → первый.
   - `targetProblem`: daily → null; file `""` / `"a.txt"` → сообщение с именем; `"Books/X.md"` → null.
   - `retainTags`: оставляет только теги из групп (сравнение по `trim()`).
-- [ ] Step 2: Тесты `Settings.test.ts`: `loadSettings(null)` → общие дефолты, одна группа нет, режим `Daily` (`id "daily"`, daily, `NO_OVERRIDES`, `tagGroupIds []`), `lastModeId "daily"`; миграция реального старого `data.json` (heading `Дневник`, префиксы, `#transcribe`, группа Daily с like/dislike) → defaults.heading `Дневник`, level 2, группа получила `id "group-1"`, режим Daily включает `["group-1"]`; `"### Дневник"` → heading `Дневник`, level 3; новый формат грузится как есть; списки не разделяются между загрузками.
+  - `modeTitle`: daily с пустым title → дата; daily с title → title; file с пустым → `Untitled mode`.
+- [ ] Step 2: Тесты `Settings.test.ts`: `loadSettings(null)` → общие дефолты, одна группа нет, режим `id "daily"`, `title ""`, daily, `NO_OVERRIDES`, `tagGroupIds []`, `lastModeId "daily"`; миграция реального старого `data.json` (heading `Дневник`, префиксы, `#transcribe`, группа Daily с like/dislike) → defaults.heading `Дневник`, level 2, группа получила `id "group-1"`, режим Daily включает `["group-1"]`; `"### Дневник"` → heading `Дневник`, level 3; новый формат грузится как есть; списки не разделяются между загрузками.
 - [ ] Step 3: `npx vitest run tests/CaptureMode.test.ts tests/Settings.test.ts` — FAIL.
 - [ ] Step 4: Реализация. Миграция детерминированная (id `group-N`, `daily`), новый id в UI — `newId()`. `EntryTemplate` импортируется из `EntryFormatter`, `HeadingTarget`/`parseHeading` — из `SectionInserter`.
 - [ ] Step 5: Сервис и UI пока компилируются через временные адаптеры не нужно — Task 3 сразу следом; в этой задаче `npm test` зелёный допускается только для новых тестов, `tsc` может падать до Task 3. Ruling в ledger.
@@ -110,7 +112,7 @@ export function retainTags(selected: Iterable<string>, groups: { tags: { tag: st
 - [ ] Step 2: Run — FAIL. Step 3: реализация. Step 4: `npm test` PASS.
 - [ ] Step 5: Commit `Resolve capture targets in the vault`.
 
-### Task 5: Экран записи — плашка и выбор режима
+### Task 5: Экран записи — заголовок-переключатель режима
 
 **Files:** Create `src/ui/ModePicker.ts`; Modify `src/ui/CaptureScreen.ts`, `src/ui/CaptureModal.ts`, `src/ui/TagPicker.ts`, `styles.css`
 
@@ -118,10 +120,10 @@ export function retainTags(selected: Iterable<string>, groups: { tags: { tag: st
 - Consumes: `pickMode`, `modeTagGroups`, `retainTags`, `TargetError`.
 - Produces: `CaptureScreenOptions += { initialModeId: string; onModeChange: (id: string) => void }`; `decorateTextInput(textarea, sourcePath: () => string)`; `CaptureModalDependencies += { modeId: () => string; onModeChange; linkSourcePath: (mode) => string }`.
 
-- [ ] Step 1: `ModePicker(screenEl, modes: () => CaptureMode[], current: () => string, onPick: (id) => void, onChange)` — слой `.dqc-modes` под плашкой, класс `is-picking-mode`, пункты `button.dqc-mode` (текущий `is-current`), тап мимо — закрыть. Открытие закрывает TagPicker и наоборот.
-- [ ] Step 2: `CaptureScreen`: поле `mode`; плашка `.dqc-mode-pill` (`Name ▾`, `chevron-down`) вверху, скрыта при одном режиме; TagPicker получает `() => modeTagGroups(settings.tagGroups, this.mode)`; при смене режима — `retainTags`, `onModeChange`, перерисовка; состояние/текст/рекордер не трогаются. `requestClose` закрывает любой открытый слой. `send` передаёт режим; `TargetError` → Notice + `setState(previous)` (аудио сохранено). Тексты: `Added to <mode name>`, `Could not add: …`, confirm `It hasn't been added yet.`
-- [ ] Step 3: CSS: `.dqc-mode-pill` (маленькая, `--text-muted`, скруглённая), `.dqc-modes` — как `.dqc-tags`, но `justify-content: flex-start` сверху; `is-picking-mode .dqc-body { pointer-events:none }`; затемнение фоном слоя (как iOS-фикс тегов).
-- [ ] Step 4: `npm test && npm run build` PASS; проверка в Obsidian через CLI: плашка, выбор, текст остаётся, теги фильтруются, отправка в file-режим (тестовый файл потом в корзину, daily-заметка восстановлена побайтно). Settings в eval — `saveSettings` заглушить.
+- [ ] Step 1: `ModePicker(screenEl, anchor: HTMLElement, modes: () => CaptureMode[], current: () => string, onPick: (id) => void, onChange)` — слой `.dqc-modes` сразу под заголовком (top по `anchor.getBoundingClientRect()`), класс `is-picking-mode`, пункты `button.dqc-mode` с `modeTitle` (текущий `is-current` + ✓), тап мимо — закрыть. Открытие закрывает TagPicker и наоборот.
+- [ ] Step 2: `CaptureScreen`: поле `mode`; `titleEl` показывает `modeTitle(mode, date)`; при >1 режиме — класс `is-switchable`, `role=button`, серый `chevron-down` на той же строке (через `&nbsp;`), клик открывает ModePicker, шеврон поворачивается при открытом списке; TagPicker получает `() => modeTagGroups(settings.tagGroups, this.mode)`; при смене режима — `retainTags`, `onModeChange`, перерисовка; состояние/текст/рекордер не трогаются. `requestClose` закрывает любой открытый слой. `send` передаёт режим; `TargetError` → Notice + `setState(previous)` (аудио сохранено). Тексты: `Added to <modeTitle>`, `Could not add: …`, confirm `It hasn't been added yet.`
+- [ ] Step 3: CSS: `.dqc-title.is-switchable` (cursor pointer, подсветка `--background-modifier-hover` при нажатии, шеврон 20px `--text-muted`), `.dqc-modes` — абсолютный слой под заголовком, пункты 19px/600 `--text-muted`, текущий `--text-normal`; `is-picking-mode .dqc-body { pointer-events:none }`; затемнение фоном слоя (как iOS-фикс тегов).
+- [ ] Step 4: `npm test && npm run build` PASS; проверка в Obsidian через CLI: заголовок с шевроном, выбор, текст остаётся, теги фильтруются, отправка в file-режим (тестовый файл потом в корзину, daily-заметка восстановлена побайтно). Settings в eval — `saveSettings` заглушить.
 - [ ] Step 5: Commit `Mode pill and picker on the capture screen`.
 
 ### Task 6: Настройки — общие, режимы, группы тегов
@@ -129,7 +131,7 @@ export function retainTags(selected: Iterable<string>, groups: { tags: { tag: st
 **Files:** Modify `src/ui/SettingsTab.ts`; Create `src/ui/FileSuggest.ts`; `styles.css`
 
 - [ ] Step 1: Секция **Defaults**: Heading (без упоминания `###`), Heading level (dropdown H1–H6), префиксы/суффиксы, Embed audio, After sending.
-- [ ] Step 2: Секция **Modes**: на режим — заголовок строки с Name + delete (скрыт, если режим один), Type dropdown (`Daily note`/`File`), File (text + `FileSuggest` по `getMarkdownFiles()`, только при File), Heading/Heading level (`Default`, H1–H6, `No heading`)/префиксы/суффиксы с плейсхолдером общего значения, toggle на каждую группу тегов (имя или `Group N`). Кнопка `Add mode` (`newId()`, имя `Mode N`, daily, без overrides, без групп).
+- [ ] Step 2: Секция **Modes**: на режим — строка `Mode N` с Title (плейсхолдер `Today's date` для Daily) + delete (скрыт, если режим один), Type dropdown (`Daily note`/`File`), File (text + `FileSuggest` по `getMarkdownFiles()`, только при File), Heading/Heading level (`Default`, H1–H6, `No heading`)/префиксы/суффиксы с плейсхолдером общего значения, toggle на каждую группу тегов (имя или `Group N`). Кнопка `Add mode` (`newId()`, title `""`, тип File, без overrides, без групп).
 - [ ] Step 3: Группы тегов: `Add group` задаёт `id: newId()`; удаление группы убирает её id из режимов.
 - [ ] Step 4: `npm run build`, проверка в Obsidian (скриншоты секций), `saveSettings` заглушен при eval.
 - [ ] Step 5: Commit `Settings for defaults and capture modes`.
@@ -138,7 +140,7 @@ export function retainTags(selected: Iterable<string>, groups: { tags: { tag: st
 
 **Files:** Modify `src/main.ts`, `manifest.json`, `package.json`, `package-lock.json`, `docs/superpowers/specs/2026-09-29-daily-quick-capture-design.md` (шапка: ссылка на новую спеку)
 
-- [ ] Step 1: `QuickCapturePlugin`: `Open quick capture` и лента открывают `lastModeId`; `syncModeCommands()` регистрирует `capture-<id>` → `Capture to <name>` для каждого режима, удаляет устаревшие через `removeCommand` (если метод есть); вызывается в `onload` и `saveSettings`. `onModeChange` сохраняет `lastModeId`.
+- [ ] Step 1: `QuickCapturePlugin`: `Open quick capture` и лента открывают `lastModeId`; `syncModeCommands()` регистрирует `capture-<id>` → `Capture to <modeTitle>` (daily без title — `Capture to daily note`) для каждого режима, удаляет устаревшие через `removeCommand` (если метод есть); вызывается в `onload` и `saveSettings`. `onModeChange` сохраняет `lastModeId`.
 - [ ] Step 2: manifest `id: quick-capture`, `name: Quick Capture`, новое описание, version `0.2.0`; package name `obsidian-quick-capture`.
 - [ ] Step 3: `npm test && npm run build`.
 - [ ] Step 4: Деплой: выключить `daily-quick-capture`, `npm run deploy` → `plugins/quick-capture/`, скопировать `data.json` из старой папки, `trash` старой папки, включить `quick-capture` (`app.plugins.loadManifests()` + `enablePluginAndSave`), проверить миграцию в загруженных настройках и что старый плагин исчез из `community-plugins.json`.
