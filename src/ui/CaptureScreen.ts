@@ -141,6 +141,7 @@ export class CaptureScreen {
 
 	setKeyboardVisible(visible: boolean): void {
 		this.root.toggleClass("is-keyboard-visible", visible);
+		this.modePicker.reposition();
 	}
 
 	submit(): void {
