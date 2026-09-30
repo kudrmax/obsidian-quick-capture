@@ -1,9 +1,22 @@
-import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { CaptureMode, FormatOverrides, HeadingLevelChoice, listDestinations, ModeFile, NO_OVERRIDES, noteName } from "../domain/CaptureMode";
+import { App, DropdownComponent, ExtraButtonComponent, getIcon, Plugin, PluginSettingTab, setIcon, Setting, TextComponent } from "obsidian";
+import {
+	CaptureMode,
+	EntryFormat,
+	HeadingLevelChoice,
+	listDestinations,
+	ModeFile,
+	modeTagGroups,
+	NO_OVERRIDES,
+	noteName,
+	resolveFormat,
+} from "../domain/CaptureMode";
+import { systemClock } from "../domain/Clock";
 import { moveItem } from "../domain/ListOrder";
-import { AfterSend, CaptureSettings, newId, TagGroup } from "../settings";
+import { EntryPreview, modeSummary, previewEntries } from "../domain/SettingsPreview";
+import { AfterSend, CaptureSettings, newId, QuickTag, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
-import { IconSuggest } from "./IconSuggest";
+import { IconPicker } from "./IconPicker";
+import { SettingsCard } from "./SettingsCard";
 import { renderTagLabel } from "./TagIcon";
 
 export interface SettingsHost extends Plugin {
@@ -12,379 +25,425 @@ export interface SettingsHost extends Plugin {
 }
 
 type TextFormatKey = "heading" | "textPrefix" | "textSuffix" | "audioPrefix" | "audioSuffix";
+type FormatTexts = Record<TextFormatKey, string>;
 
-interface TextFormatField {
-	key: TextFormatKey;
-	name: string;
-	description: string;
+interface FormatFieldsOptions {
+	placeholder(key: TextFormatKey): string;
+	levels: [value: string, label: string][];
+	level: string;
+	setLevel(value: string): void;
+	hint: string;
+	preview(): EntryPreview;
 }
 
-const TIME_HINT = "{{time}} becomes the current time, e.g. 23:35, and {{date}} the current date, e.g. 2026-09-30. Spaces at the edges are kept.";
 const LEVELS = [1, 2, 3, 4, 5, 6];
-
-const FORMAT_FIELDS: TextFormatField[] = [
-	{
-		key: "heading",
-		name: "Heading",
-		description:
-			"Entries go to the end of this heading's section. If the note has no such heading, it is created at the end of the note. Leave empty to add to the end of the note.",
-	},
-	{ key: "textPrefix", name: "Text prefix", description: TIME_HINT },
-	{ key: "textSuffix", name: "Text suffix", description: TIME_HINT },
-	{ key: "audioPrefix", name: "Audio prefix", description: TIME_HINT },
-	{ key: "audioSuffix", name: "Audio suffix", description: `${TIME_HINT} Useful for a tag, e.g. " #transcribe".` },
-];
+const LEVEL_OPTIONS = LEVELS.map((level): [string, string] => [String(level), `H${level}`]);
+const PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · spaces at the edges are kept";
+const HEADING_HINT = "Entries go to the end of the heading's section. A missing heading is created at the end of the note. No heading: end of the note.";
+const DEFAULTS_KEY = "defaults";
 
 export class SettingsTab extends PluginSettingTab {
+	private openCard: string | null = null;
+	private cards = new Map<string, SettingsCard>();
+	private refreshers: (() => void)[] = [];
+
 	constructor(app: App, private readonly host: SettingsHost) {
 		super(app, host);
 	}
 
 	override display(): void {
 		this.containerEl.empty();
-		this.defaultSettings();
+		this.containerEl.addClass("dqc-settings");
+		this.cards = new Map();
+		this.refreshers = [];
 		this.modeSettings();
 		this.tagGroupSettings();
+		this.generalSettings();
+		this.refresh();
 	}
 
 	private get settings(): CaptureSettings {
 		return this.host.settings;
 	}
 
-	private defaultSettings(): void {
-		const { containerEl } = this;
-		const defaults = this.settings.defaults;
-		new Setting(containerEl).setName("Defaults").setDesc("Every mode uses these unless it sets its own.").setHeading();
-		this.formatText(containerEl, FORMAT_FIELDS[0], defaults.heading, "Journal", (value) => (defaults.heading = value));
-		new Setting(containerEl)
-			.setName("Heading level")
-			.setDesc("Used when the heading is created.")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOptions(Object.fromEntries(LEVELS.map((level) => [String(level), `H${level}`])))
-					.setValue(String(defaults.headingLevel))
-					.onChange(async (value) => {
-						defaults.headingLevel = Number(value);
-						await this.host.saveSettings();
-					}),
-			);
-		for (const field of FORMAT_FIELDS.slice(1)) {
-			this.formatText(containerEl, field, defaults[field.key], "", (value) => (defaults[field.key] = value));
-		}
-		new Setting(containerEl)
-			.setName("Embed audio")
-			.setDesc("On: ![[Recording.m4a]] shows a player. Off: [[Recording.m4a]] is a plain link.")
-			.addToggle((toggle) =>
-				toggle.setValue(this.settings.embedAudio).onChange(async (value) => {
-					this.settings.embedAudio = value;
-					await this.host.saveSettings();
-				}),
-			);
-		new Setting(containerEl)
-			.setName("After sending")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOptions({ close: "Close the screen", stay: "Stay for the next entry" })
-					.setValue(this.settings.afterSend)
-					.onChange(async (value) => {
-						this.settings.afterSend = value as AfterSend;
-						await this.host.saveSettings();
-					}),
-			);
-		new Setting(containerEl)
-			.setName("Open keyboard on iPhone and iPad")
-			.setDesc("Put the cursor in the text field when the capture screen opens, so the keyboard shows right away. Turn off to start with voice more often.")
-			.addToggle((toggle) =>
-				toggle.setValue(this.settings.openKeyboardOnMobile).onChange(async (value) => {
-					this.settings.openKeyboardOnMobile = value;
-					await this.host.saveSettings();
-				}),
-			);
-	}
-
 	private modeSettings(): void {
 		new Setting(this.containerEl)
 			.setName("Modes")
-			.setDesc("Where an entry goes. A mode writes to the daily note or to any of its files. Tap the title on the capture screen to switch. Empty fields use the defaults.")
+			.setDesc("Where an entry goes. Tap the title on the capture screen to switch.")
 			.setHeading();
-		this.settings.modes.forEach((mode, index) => this.modeSetting(mode, index));
-		new Setting(this.containerEl).addButton((button) =>
-			button.setButtonText("Add mode").onClick(async () => {
-				this.settings.modes.push({
-					id: newId(),
-					title: "",
-					target: { type: "files", files: [emptyFile()] },
-					overrides: { ...NO_OVERRIDES },
-					tagGroupIds: [],
-				});
-				await this.saveAndRedraw();
-			}),
-		);
-	}
-
-	private modeSetting(mode: CaptureMode, index: number): void {
-		const box = this.containerEl.createDiv({ cls: "dqc-mode-setting" });
-		const isDaily = mode.target.type === "daily";
-		const titleSetting = new Setting(box)
-			.setName(`Mode ${index + 1}`)
-			.setDesc(isDaily ? "Title of the capture screen." : "Name of this group of files, e.g. Books. Shown only here.")
-			.addText((text) =>
-				text
-					.setPlaceholder(isDaily ? "Today's date" : "Name")
-					.setValue(mode.title)
-					.onChange(async (value) => {
-						mode.title = value;
-						await this.host.saveSettings();
-					}),
-			);
-		if (this.settings.modes.length > 1) {
-			titleSetting.addExtraButton((button) =>
-				button
-					.setIcon("trash-2")
-					.setTooltip("Delete mode")
-					.onClick(async () => {
-						this.settings.modes.splice(index, 1);
-						await this.saveAndRedraw();
-					}),
-			);
-		}
-
-		const hasFiles = mode.target.type === "files" && mode.target.files.some((file) => file.path.trim() !== "");
-		new Setting(box)
-			.setName("Writes to")
-			.setDesc(hasFiles ? "Remove the files below to switch to the daily note." : "")
-			.addDropdown((dropdown) =>
-				dropdown
-					.setDisabled(hasFiles)
-					.addOptions({ daily: "Daily note", files: "Files" })
-					.setValue(mode.target.type)
-					.onChange(async (value) => {
-						mode.target = value === "daily" ? { type: "daily" } : { type: "files", files: [emptyFile()] };
-						await this.saveAndRedraw();
-					}),
-			);
-		const target = mode.target;
-		if (target.type === "files") {
-			const hint = () =>
-				listDestinations([mode], "").length === 0
-					? "Add a file to see this mode on the capture screen."
-					: "Each file shows up on the capture screen by its alias, or by its name when the alias is empty.";
-			const addFile = new Setting(box);
-			const refreshHint = () => addFile.setDesc(hint());
-			target.files.forEach((file, fileIndex) => this.fileSetting(box, target.files, file, fileIndex, refreshHint));
-			box.appendChild(addFile.settingEl);
-			refreshHint();
-			addFile.addButton((button) =>
-				button.setButtonText("Add file").onClick(async () => {
-					target.files.push(emptyFile());
-					await this.saveAndRedraw();
-				}),
-			);
-		}
-
-		this.overrideText(box, FORMAT_FIELDS[0], mode.overrides);
-		this.headingLevelOverride(box, mode.overrides);
-		for (const field of FORMAT_FIELDS.slice(1)) this.overrideText(box, field, mode.overrides);
-
-		this.settings.tagGroups.forEach((group, groupIndex) => {
-			new Setting(box).setName(`Tags: ${group.name.trim() || `Group ${groupIndex + 1}`}`).addToggle((toggle) =>
-				toggle.setValue(mode.tagGroupIds.includes(group.id)).onChange(async (on) => {
-					mode.tagGroupIds = this.settings.tagGroups
-						.map((g) => g.id)
-						.filter((id) => (id === group.id ? on : mode.tagGroupIds.includes(id)));
-					await this.host.saveSettings();
-				}),
-			);
+		this.settings.modes.forEach((mode, index) => this.modeCard(mode, index));
+		this.addButton(this.containerEl, "Add mode", async () => {
+			const mode: CaptureMode = {
+				id: newId(),
+				title: "",
+				target: { type: "files", files: [emptyFile()] },
+				overrides: { ...NO_OVERRIDES },
+				tagGroupIds: [],
+			};
+			this.settings.modes.push(mode);
+			this.openCard = modeKey(mode);
+			await this.saveAndRedraw();
 		});
 	}
 
-	private fileSetting(container: HTMLElement, files: ModeFile[], file: ModeFile, index: number, onPathChange: () => void): void {
-		const setting = new Setting(container).setName(`File ${index + 1}`).setClass("dqc-file-setting");
-		let aliasInput: HTMLInputElement | null = null;
-		const aliasPlaceholder = () => noteName(file.path) || "Alias";
-		setting
-			.addText((text) => {
-				aliasInput = text.inputEl;
-				text
-					.setPlaceholder(aliasPlaceholder())
-					.setValue(file.alias)
-					.onChange(async (value) => {
-						file.alias = value;
-						await this.host.saveSettings();
-					});
-			})
-			.addText((text) => {
-				const savePath = async (value: string) => {
-					file.path = value;
-					aliasInput?.setAttribute("placeholder", aliasPlaceholder());
-					onPathChange();
-					await this.host.saveSettings();
-				};
-				text.setPlaceholder("Books/Book.md").setValue(file.path).onChange(savePath);
-				new FileSuggest(this.app, text.inputEl, (path) => void savePath(path));
-			})
-			.addExtraButton((button) =>
-				button
-					.setIcon("trash-2")
-					.setTooltip("Remove file from this mode")
-					.onClick(async () => {
-						files.splice(index, 1);
-						await this.saveAndRedraw();
-					}),
+	private modeCard(mode: CaptureMode, index: number): void {
+		const card = this.card(modeKey(mode));
+		const body = card.bodyEl;
+		const isDaily = mode.target.type === "daily";
+
+		label(body, "Name");
+		new TextComponent(line(body))
+			.setPlaceholder(isDaily ? "Today's date" : "Name, e.g. Books")
+			.setValue(mode.title)
+			.onChange((value) => {
+				mode.title = value;
+				return this.changed();
+			});
+		hint(body, isDaily ? "Title of the capture screen." : "Name of this group of files. Shown only here.");
+
+		const refreshTarget = this.targetFields(body, mode);
+		const refreshFormat = this.formatFields(body, mode.overrides, {
+			placeholder: (key) => this.settings.defaults[key] || (key === "heading" ? "No heading" : "empty"),
+			levels: [["default", `Default (H${this.settings.defaults.headingLevel})`], ...LEVEL_OPTIONS, ["none", "No heading"]],
+			level: String(mode.overrides.headingLevel),
+			setLevel: (value) => (mode.overrides.headingLevel = parseLevelChoice(value)),
+			hint: `${PLACEHOLDER_HINT} · an empty field uses the default`,
+			preview: () =>
+				previewEntries(resolveFormat(this.settings.defaults, mode.overrides), this.settings.embedAudio, systemClock, this.sampleTag(mode)),
+		});
+		this.modeTagGroups(body, mode);
+		this.modeFooter(body, mode, index);
+
+		this.refreshers.push(() => {
+			card.setTitle(mode.title.trim() || (isDaily ? "Daily note" : `Mode ${index + 1}`));
+			card.summaryEl.setText(modeSummary(mode, this.settings.defaults));
+			refreshTarget();
+			refreshFormat();
+		});
+	}
+
+	private targetFields(body: HTMLElement, mode: CaptureMode): () => void {
+		label(body, "Writes to");
+		const options = body.createDiv({ cls: "dqc-seg" });
+		const daily = this.targetOption(options, mode, "daily", "Daily note");
+		this.targetOption(options, mode, "files", "Files");
+		const lockHint = hint(body, "Remove the files below to switch to the daily note.");
+		const target = mode.target;
+		let filesHint: HTMLElement | null = null;
+		if (target.type === "files") {
+			target.files.forEach((file, index) => this.fileLine(body, target.files, file, index));
+			this.addLink(body, "Add file", async () => {
+				target.files.push(emptyFile());
+				await this.saveAndRedraw();
+			});
+			filesHint = hint(body, "");
+		}
+		return () => {
+			const locked = hasFiles(mode);
+			daily.disabled = locked;
+			lockHint.toggle(locked);
+			filesHint?.setText(
+				listDestinations([mode], "").length === 0
+					? "Add a file to see this mode on the capture screen."
+					: "Each file shows up on the capture screen by its alias, or by its name when the alias is empty.",
 			);
+		};
 	}
 
-	private overrideText(container: HTMLElement, field: TextFormatField, overrides: FormatOverrides): void {
-		const inherited = this.settings.defaults[field.key];
-		new Setting(container).setName(field.name).addText((text) =>
-			text
-				.setPlaceholder(inherited === "" ? "Default: empty" : inherited)
-				.setValue(overrides[field.key])
-				.onChange(async (value) => {
-					overrides[field.key] = value;
-					await this.host.saveSettings();
+	private targetOption(container: HTMLElement, mode: CaptureMode, type: "daily" | "files", text: string): HTMLButtonElement {
+		const option = container.createEl("button", { text, cls: "dqc-seg-option" });
+		option.toggleClass("is-active", mode.target.type === type);
+		option.addEventListener("click", async () => {
+			if (mode.target.type === type || hasFiles(mode)) return;
+			mode.target = type === "daily" ? { type: "daily" } : { type: "files", files: [emptyFile()] };
+			await this.saveAndRedraw();
+		});
+		return option;
+	}
+
+	private fileLine(body: HTMLElement, files: ModeFile[], file: ModeFile, index: number): void {
+		const row = line(body, "dqc-file-line");
+		const alias = new TextComponent(row).setValue(file.alias).onChange((value) => {
+			file.alias = value;
+			return this.changed();
+		});
+		alias.inputEl.addClass("dqc-file-alias");
+		const showAliasPlaceholder = () => alias.setPlaceholder(noteName(file.path) || "Alias");
+		showAliasPlaceholder();
+		const savePath = (value: string) => {
+			file.path = value;
+			showAliasPlaceholder();
+			return this.changed();
+		};
+		const path = new TextComponent(row).setPlaceholder("Books/Book.md").setValue(file.path).onChange(savePath);
+		new FileSuggest(this.app, path.inputEl, (picked) => void savePath(picked));
+		iconButton(row, "x", "Remove file from this mode", async () => {
+			files.splice(index, 1);
+			await this.saveAndRedraw();
+		});
+	}
+
+	private modeTagGroups(body: HTMLElement, mode: CaptureMode): void {
+		label(body, "Quick tags");
+		if (this.settings.tagGroups.length === 0) {
+			hint(body, "No tag groups yet. Add one in Quick tags below.");
+			return;
+		}
+		const chips = body.createDiv({ cls: "dqc-chips" });
+		this.settings.tagGroups.forEach((group, index) => {
+			const chip = chips.createEl("button", { cls: "dqc-chip", text: groupName(group, index) });
+			const show = () => {
+				const on = mode.tagGroupIds.includes(group.id);
+				chip.toggleClass("is-active", on);
+				chip.setAttribute("aria-pressed", String(on));
+			};
+			show();
+			chip.addEventListener("click", async () => {
+				const on = !mode.tagGroupIds.includes(group.id);
+				mode.tagGroupIds = this.settings.tagGroups
+					.map((candidate) => candidate.id)
+					.filter((id) => (id === group.id ? on : mode.tagGroupIds.includes(id)));
+				show();
+				await this.changed();
+			});
+		});
+	}
+
+	private modeFooter(body: HTMLElement, mode: CaptureMode, index: number): void {
+		const modes = this.settings.modes;
+		const footer = body.createDiv({ cls: "dqc-card-footer" });
+		const move = (step: -1 | 1) => async () => {
+			moveItem(modes, index, step);
+			await this.saveAndRedraw();
+		};
+		iconButton(footer, "arrow-up", "Move mode up", move(-1), index === 0);
+		iconButton(footer, "arrow-down", "Move mode down", move(1), index === modes.length - 1);
+		footer.createDiv({ cls: "dqc-spacer" });
+		if (modes.length > 1) {
+			this.dangerLink(footer, "Delete mode", async () => {
+				modes.splice(index, 1);
+				await this.saveAndRedraw();
+			});
+		}
+	}
+
+	private sampleTag(mode: CaptureMode): string {
+		const tags = modeTagGroups(this.settings.tagGroups, mode).flatMap((group) => group.tags);
+		return tags.find((quickTag) => quickTag.tag.trim() !== "")?.tag ?? "";
+	}
+
+	private formatFields(body: HTMLElement, texts: FormatTexts, options: FormatFieldsOptions): () => void {
+		const inputs = new Map<TextFormatKey, TextComponent>();
+		const text = (parent: HTMLElement, key: TextFormatKey) => {
+			inputs.set(
+				key,
+				new TextComponent(parent).setValue(texts[key]).onChange((value) => {
+					texts[key] = value;
+					return this.changed();
 				}),
-		);
-	}
-
-	private headingLevelOverride(container: HTMLElement, overrides: FormatOverrides): void {
-		const options: Record<string, string> = { default: `Default (H${this.settings.defaults.headingLevel})` };
-		for (const level of LEVELS) options[String(level)] = `H${level}`;
-		options.none = "No heading, end of note";
-		new Setting(container).setName("Heading level").addDropdown((dropdown) =>
-			dropdown
-				.addOptions(options)
-				.setValue(String(overrides.headingLevel))
-				.onChange(async (value) => {
-					overrides.headingLevel = parseLevelChoice(value);
-					await this.host.saveSettings();
-				}),
-		);
-	}
-
-	private formatText(
-		container: HTMLElement,
-		field: TextFormatField,
-		value: string,
-		placeholder: string,
-		save: (value: string) => void,
-	): void {
-		new Setting(container)
-			.setName(field.name)
-			.setDesc(field.description)
-			.addText((text) =>
-				text
-					.setPlaceholder(placeholder)
-					.setValue(value)
-					.onChange(async (next) => {
-						save(next);
-						await this.host.saveSettings();
-					}),
 			);
+		};
+		const pair = (name: string, prefix: TextFormatKey, suffix: TextFormatKey) => {
+			const row = namedLine(body, name);
+			text(row, prefix);
+			row.createSpan({ cls: "dqc-line-middle", text: name.toLowerCase() });
+			text(row, suffix);
+		};
+
+		label(body, "Format");
+		const headingRow = namedLine(body, "Heading");
+		text(headingRow, "heading");
+		const level = new DropdownComponent(headingRow);
+		for (const [value, name] of options.levels) level.addOption(value, name);
+		level.setValue(options.level).onChange((value) => {
+			options.setLevel(value);
+			return this.changed();
+		});
+		pair("Text", "textPrefix", "textSuffix");
+		pair("Audio", "audioPrefix", "audioSuffix");
+		hint(body, HEADING_HINT);
+		hint(body, options.hint);
+		const preview = body.createDiv({ cls: "dqc-preview" });
+
+		return () => {
+			inputs.forEach((input, key) => input.setPlaceholder(options.placeholder(key)));
+			renderPreview(preview, options.preview());
+		};
 	}
 
 	private tagGroupSettings(): void {
 		new Setting(this.containerEl)
 			.setName("Quick tags")
-			.setDesc("Tags you can add to an entry with the # button. They go right before the suffix. A tag with an icon shows the icon on the button and writes the tag. Turn groups on for each mode above.")
+			.setDesc("Tags you add to an entry with the # button. They go right before the suffix. Turn groups on inside each mode.")
 			.setHeading();
-		this.host.settings.tagGroups.forEach((group, index) => this.tagGroupSetting(group, index));
-		new Setting(this.containerEl).addButton((button) =>
-			button.setButtonText("Add group").onClick(async () => {
-				this.host.settings.tagGroups.push({ id: newId(), name: "", tags: [{ tag: "", icon: "" }] });
-				await this.saveAndRedraw();
-			}),
-		);
+		this.settings.tagGroups.forEach((group, index) => this.tagGroupCard(group, index));
+		this.addButton(this.containerEl, "Add group", async () => {
+			const group: TagGroup = { id: newId(), name: "", tags: [{ tag: "", icon: "" }] };
+			this.settings.tagGroups.push(group);
+			this.openCard = groupKey(group);
+			await this.saveAndRedraw();
+		});
 	}
 
-	private tagGroupSetting(group: TagGroup, index: number): void {
-		new Setting(this.containerEl)
-			.setName(`Group ${index + 1}`)
-			.setClass("dqc-tag-group-setting")
-			.addText((text) =>
-				text
-					.setPlaceholder("Name, e.g. Books")
-					.setValue(group.name)
-					.onChange(async (value) => {
-						group.name = value;
-						await this.host.saveSettings();
-					}),
-			)
-			.addExtraButton((button) =>
-				button
-					.setIcon("trash-2")
-					.setTooltip("Delete group")
-					.onClick(async () => {
-						this.host.settings.tagGroups.splice(index, 1);
-						for (const mode of this.host.settings.modes) {
-							mode.tagGroupIds = mode.tagGroupIds.filter((id) => id !== group.id);
-						}
-						await this.saveAndRedraw();
-					}),
-			);
+	private tagGroupCard(group: TagGroup, index: number): void {
+		const card = this.card(groupKey(group));
+		const body = card.bodyEl;
 
-		group.tags.forEach((quickTag, tagIndex) => {
-			const setting = new Setting(this.containerEl);
-			const preview = setting.nameEl.createSpan({ cls: "dqc-tag-row-preview" });
-			const updatePreview = () => renderTagLabel(preview, quickTag.tag, quickTag.icon);
-			updatePreview();
-			setting
-				.addText((text) =>
-					text
-						.setPlaceholder("#tag")
-						.setValue(quickTag.tag)
-						.onChange(async (value) => {
-							quickTag.tag = value;
-							updatePreview();
-							await this.host.saveSettings();
-						}),
-				)
-				.addText((text) => {
-					const saveIcon = async (value: string) => {
-						quickTag.icon = value.trim();
-						updatePreview();
-						await this.host.saveSettings();
-					};
-					text.setPlaceholder("Icon (optional)").setValue(quickTag.icon).onChange(saveIcon);
-					new IconSuggest(this.app, text.inputEl, (icon) => void saveIcon(icon));
-				})
-				.addExtraButton((button) =>
-					button
-						.setIcon("chevron-up")
-						.setTooltip("Move up")
-						.setDisabled(tagIndex === 0)
-						.onClick(async () => {
-							moveItem(group.tags, tagIndex, -1);
-							await this.saveAndRedraw();
-						}),
-				)
-				.addExtraButton((button) =>
-					button
-						.setIcon("chevron-down")
-						.setTooltip("Move down")
-						.setDisabled(tagIndex === group.tags.length - 1)
-						.onClick(async () => {
-							moveItem(group.tags, tagIndex, 1);
-							await this.saveAndRedraw();
-						}),
-				)
-				.addExtraButton((button) =>
-					button
-						.setIcon("x")
-						.setTooltip("Remove tag")
-						.onClick(async () => {
-							group.tags.splice(tagIndex, 1);
-							await this.saveAndRedraw();
-						}),
-				);
+		label(body, "Name");
+		new TextComponent(line(body))
+			.setPlaceholder("Name, e.g. Books")
+			.setValue(group.name)
+			.onChange((value) => {
+				group.name = value;
+				return this.changed();
+			});
+
+		label(body, "Tags");
+		group.tags.forEach((quickTag, tagIndex) => this.tagLine(body, group, quickTag, tagIndex));
+		this.addLink(body, "Add tag", async () => {
+			group.tags.push({ tag: "", icon: "" });
+			await this.saveAndRedraw();
+		});
+		const usage = hint(body, "");
+
+		const footer = body.createDiv({ cls: "dqc-card-footer" });
+		footer.createDiv({ cls: "dqc-spacer" });
+		this.dangerLink(footer, "Delete group", async () => {
+			this.settings.tagGroups.splice(index, 1);
+			for (const mode of this.settings.modes) mode.tagGroupIds = mode.tagGroupIds.filter((id) => id !== group.id);
+			await this.saveAndRedraw();
 		});
 
-		new Setting(this.containerEl).addButton((button) =>
-			button.setButtonText("Add tag").onClick(async () => {
-				group.tags.push({ tag: "", icon: "" });
-				await this.saveAndRedraw();
-			}),
+		this.refreshers.push(() => {
+			card.setTitle(groupName(group, index));
+			renderTagSummary(card.summaryEl, group);
+			const users = this.settings.modes
+				.map((mode, modeIndex) => ({ mode, name: mode.title.trim() || (mode.target.type === "daily" ? "Daily note" : `Mode ${modeIndex + 1}`) }))
+				.filter(({ mode }) => mode.tagGroupIds.includes(group.id))
+				.map(({ name }) => name);
+			usage.setText(users.length > 0 ? `Used in: ${users.join(", ")}` : "Not used yet. Turn it on inside a mode.");
+		});
+	}
+
+	private tagLine(body: HTMLElement, group: TagGroup, quickTag: QuickTag, index: number): void {
+		const row = line(body);
+		const iconEl = row.createEl("button", { cls: "dqc-icon-choice", attr: { "aria-label": "Choose icon" } });
+		const showIcon = () => {
+			iconEl.empty();
+			const svg = quickTag.icon.trim() === "" ? null : getIcon(quickTag.icon.trim());
+			iconEl.toggleClass("is-empty", svg === null);
+			if (svg) iconEl.appendChild(svg);
+			else setIcon(iconEl, "smile-plus");
+		};
+		showIcon();
+		iconEl.addEventListener("click", () => {
+			new IconPicker(this.app, (icon) => {
+				quickTag.icon = icon;
+				showIcon();
+				void this.changed();
+			}).open();
+		});
+		new TextComponent(row)
+			.setPlaceholder("#tag")
+			.setValue(quickTag.tag)
+			.onChange((value) => {
+				quickTag.tag = value;
+				return this.changed();
+			});
+		const move = (step: -1 | 1) => async () => {
+			moveItem(group.tags, index, step);
+			await this.saveAndRedraw();
+		};
+		iconButton(row, "arrow-up", "Move up", move(-1), index === 0);
+		iconButton(row, "arrow-down", "Move down", move(1), index === group.tags.length - 1);
+		iconButton(row, "x", "Remove tag", async () => {
+			group.tags.splice(index, 1);
+			await this.saveAndRedraw();
+		});
+	}
+
+	private generalSettings(): void {
+		const { containerEl } = this;
+		new Setting(containerEl).setName("General").setHeading();
+		new Setting(containerEl)
+			.setName("Embed audio")
+			.setDesc("On: ![[Recording.m4a]] shows a player. Off: [[Recording.m4a]] is a plain link.")
+			.addToggle((toggle) =>
+				toggle.setValue(this.settings.embedAudio).onChange((value) => {
+					this.settings.embedAudio = value;
+					return this.changed();
+				}),
+			);
+		new Setting(containerEl).setName("After sending").addDropdown((dropdown) =>
+			dropdown
+				.addOptions({ close: "Close the screen", stay: "Stay for the next entry" })
+				.setValue(this.settings.afterSend)
+				.onChange((value) => {
+					this.settings.afterSend = value as AfterSend;
+					return this.changed();
+				}),
 		);
+		new Setting(containerEl)
+			.setName("Open keyboard on iPhone and iPad")
+			.setDesc("The keyboard shows as soon as the capture screen opens. Turn off to start with voice more often.")
+			.addToggle((toggle) =>
+				toggle.setValue(this.settings.openKeyboardOnMobile).onChange((value) => {
+					this.settings.openKeyboardOnMobile = value;
+					return this.changed();
+				}),
+			);
+		this.defaultsCard();
+	}
+
+	private defaultsCard(): void {
+		const defaults: EntryFormat = this.settings.defaults;
+		const card = this.card(DEFAULTS_KEY);
+		card.setTitle("Default format");
+		card.summaryEl.setText("Used where a mode leaves a field empty.");
+		const refreshFormat = this.formatFields(card.bodyEl, defaults, {
+			placeholder: (key) => DEFAULT_PLACEHOLDERS[key],
+			levels: LEVEL_OPTIONS,
+			level: String(defaults.headingLevel),
+			setLevel: (value) => (defaults.headingLevel = Number(value)),
+			hint: PLACEHOLDER_HINT,
+			preview: () => previewEntries(resolveFormat(defaults, NO_OVERRIDES), this.settings.embedAudio, systemClock),
+		});
+		this.refreshers.push(refreshFormat);
+	}
+
+	private card(key: string): SettingsCard {
+		const card = new SettingsCard(this.containerEl, () => {
+			this.openCard = this.openCard === key ? null : key;
+			this.showOpenCard();
+		});
+		card.setOpen(this.openCard === key);
+		this.cards.set(key, card);
+		return card;
+	}
+
+	private showOpenCard(): void {
+		this.cards.forEach((card, key) => card.setOpen(key === this.openCard));
+	}
+
+	private addButton(container: HTMLElement, text: string, onClick: () => Promise<void>): void {
+		container.createEl("button", { cls: "dqc-add-card", text: `+ ${text}` }).addEventListener("click", () => void onClick());
+	}
+
+	private addLink(container: HTMLElement, text: string, onClick: () => Promise<void>): void {
+		container.createEl("button", { cls: "dqc-link", text: `+ ${text}` }).addEventListener("click", () => void onClick());
+	}
+
+	private dangerLink(container: HTMLElement, text: string, onClick: () => Promise<void>): void {
+		container.createEl("button", { cls: "dqc-link is-danger", text }).addEventListener("click", () => void onClick());
+	}
+
+	private refresh(): void {
+		for (const refresh of this.refreshers) refresh();
+	}
+
+	private async changed(): Promise<void> {
+		this.refresh();
+		await this.host.saveSettings();
 	}
 
 	private async saveAndRedraw(): Promise<void> {
@@ -393,10 +452,77 @@ export class SettingsTab extends PluginSettingTab {
 	}
 }
 
+const DEFAULT_PLACEHOLDERS: FormatTexts = {
+	heading: "No heading, e.g. Journal",
+	textPrefix: "prefix",
+	textSuffix: "suffix",
+	audioPrefix: "prefix",
+	audioSuffix: "e.g. #transcribe",
+};
+
+function modeKey(mode: CaptureMode): string {
+	return `mode:${mode.id}`;
+}
+
+function groupKey(group: TagGroup): string {
+	return `group:${group.id}`;
+}
+
+function groupName(group: TagGroup, index: number): string {
+	return group.name.trim() || `Group ${index + 1}`;
+}
+
+function hasFiles(mode: CaptureMode): boolean {
+	return mode.target.type === "files" && mode.target.files.some((file) => file.path.trim() !== "");
+}
+
 function emptyFile(): ModeFile {
 	return { id: newId(), alias: "", path: "", lastUsedAt: 0 };
 }
 
 function parseLevelChoice(value: string): HeadingLevelChoice {
 	return value === "default" || value === "none" ? value : Number(value);
+}
+
+function label(parent: HTMLElement, text: string): void {
+	parent.createDiv({ cls: "dqc-label", text });
+}
+
+function hint(parent: HTMLElement, text: string): HTMLElement {
+	return parent.createDiv({ cls: "dqc-hint", text });
+}
+
+function line(parent: HTMLElement, cls = ""): HTMLElement {
+	return parent.createDiv({ cls: `dqc-line ${cls}`.trim() });
+}
+
+function namedLine(parent: HTMLElement, name: string): HTMLElement {
+	const row = line(parent, "dqc-named-line");
+	row.createSpan({ cls: "dqc-line-name", text: name });
+	return row;
+}
+
+function iconButton(parent: HTMLElement, icon: string, tooltip: string, onClick: () => Promise<void>, disabled = false): void {
+	new ExtraButtonComponent(parent)
+		.setIcon(icon)
+		.setTooltip(tooltip)
+		.setDisabled(disabled)
+		.onClick(() => void onClick());
+}
+
+function renderPreview(el: HTMLElement, preview: EntryPreview): void {
+	el.empty();
+	if (preview.heading !== null) el.createDiv({ cls: "dqc-preview-heading", text: preview.heading });
+	el.createDiv({ text: preview.text });
+	el.createDiv({ text: preview.audio });
+}
+
+function renderTagSummary(el: HTMLElement, group: TagGroup): void {
+	el.empty();
+	const tags = group.tags.filter((quickTag) => quickTag.tag.trim() !== "");
+	if (tags.length === 0) {
+		el.setText("No tags yet");
+		return;
+	}
+	for (const quickTag of tags) renderTagLabel(el.createSpan({ cls: "dqc-tag-row-preview" }), quickTag.tag, quickTag.icon);
 }
