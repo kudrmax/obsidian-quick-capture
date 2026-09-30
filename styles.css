@@ -224,20 +224,9 @@
 	--dqc-keyboard-lift: calc(var(--keyboard-height, 0px) + 12px - var(--dqc-bottom-inset));
 }
 
-@media (max-width: 430px) {
-	.dqc-screen {
-		--dqc-secondary-size: 54px;
-		--dqc-gap: 14px;
-		--dqc-gutter: 12px;
-	}
-}
-
-@media (max-width: 359px) {
-	.dqc-screen {
-		--dqc-primary-size: 64px;
-		--dqc-secondary-size: 48px;
-		--dqc-gap: 10px;
-	}
+body.is-mobile .dqc-controls {
+	display: flex;
+	justify-content: center;
 }
 
 .dqc-slot {
