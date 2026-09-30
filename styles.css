@@ -12,12 +12,6 @@
 	background: var(--background-primary);
 }
 
-body.is-mobile .dqc-modal .modal-content {
-	box-sizing: border-box;
-	padding-bottom: var(--keyboard-height, 0px);
-	transition: padding-bottom 250ms cubic-bezier(0.12, 0, 0.44, 0.99);
-}
-
 .dqc-modal .modal-close-button,
 .dqc-modal .modal-header-button,
 .dqc-modal .modal-header {
@@ -36,6 +30,10 @@ body.is-mobile .dqc-modal .modal-content {
 	--dqc-wave-played: var(--color-red);
 	--dqc-primary-size: 76px;
 	--dqc-secondary-size: 60px;
+	--dqc-gap: 24px;
+	--dqc-gutter: 20px;
+	--dqc-bottom-inset: max(20px, env(safe-area-inset-bottom));
+	--dqc-keyboard-lift: 0px;
 	position: relative;
 	display: flex;
 	flex-direction: column;
@@ -74,7 +72,8 @@ body.is-mobile .dqc-modal .modal-content {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	padding: var(--dqc-footer-height, 140px) 20px;
+	padding: var(--dqc-footer-height, 140px) var(--dqc-gutter);
+	padding-bottom: calc(var(--dqc-footer-height, 140px) + var(--dqc-keyboard-lift));
 }
 
 .dqc-editor {
@@ -215,15 +214,30 @@ body.is-mobile .dqc-modal .modal-content {
 
 .dqc-controls {
 	display: grid;
-	grid-template-columns: 1fr auto 1fr;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
-	gap: 24px;
-	padding: 12px 20px max(20px, env(safe-area-inset-bottom));
-	transition: padding-bottom 250ms cubic-bezier(0.12, 0, 0.44, 0.99);
+	gap: var(--dqc-gap);
+	padding: 12px var(--dqc-gutter) var(--dqc-bottom-inset);
 }
 
-.dqc-screen.is-keyboard-visible .dqc-controls {
-	padding-bottom: 12px;
+.dqc-screen.is-keyboard-visible {
+	--dqc-keyboard-lift: calc(var(--keyboard-height, 0px) + 12px - var(--dqc-bottom-inset));
+}
+
+@media (max-width: 430px) {
+	.dqc-screen {
+		--dqc-secondary-size: 54px;
+		--dqc-gap: 14px;
+		--dqc-gutter: 12px;
+	}
+}
+
+@media (max-width: 359px) {
+	.dqc-screen {
+		--dqc-primary-size: 64px;
+		--dqc-secondary-size: 48px;
+		--dqc-gap: 10px;
+	}
 }
 
 .dqc-slot {
@@ -238,7 +252,7 @@ body.is-mobile .dqc-modal .modal-content {
 .dqc-controls-side {
 	display: flex;
 	align-items: center;
-	gap: 24px;
+	gap: var(--dqc-gap);
 }
 
 .dqc-controls-start {
@@ -332,6 +346,9 @@ body.is-mobile .dqc-modal .modal-content {
 	left: 0;
 	right: 0;
 	bottom: 0;
+	transform: translateY(calc(-1 * var(--dqc-keyboard-lift)));
+	transition: transform 300ms cubic-bezier(0.12, 0, 0.44, 0.99);
+	will-change: transform;
 }
 
 .dqc-suggestion {
