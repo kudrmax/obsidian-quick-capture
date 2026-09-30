@@ -71,6 +71,7 @@ export class SettingsTab extends PluginSettingTab {
 			.setName("Modes")
 			.setDesc("Where an entry goes. Tap the title on the capture screen to switch.")
 			.setHeading();
+		this.defaultsCard();
 		this.settings.modes.forEach((mode, index) => this.modeCard(mode, index));
 		this.addButton(this.containerEl, "Add mode", async () => {
 			const mode: CaptureMode = {
@@ -392,14 +393,13 @@ export class SettingsTab extends PluginSettingTab {
 					return this.changed();
 				}),
 			);
-		this.defaultsCard();
 	}
 
 	private defaultsCard(): void {
 		const defaults: EntryFormat = this.settings.defaults;
 		const card = this.card(DEFAULTS_KEY);
 		card.setTitle("Default format");
-		card.summaryEl.setText("Used where a mode leaves a field empty.");
+		card.summaryEl.setText("Every mode uses it where its own field is empty.");
 		const refreshFormat = this.formatFields(card.bodyEl, defaults, {
 			placeholder: (key) => DEFAULT_PLACEHOLDERS[key],
 			levels: LEVEL_OPTIONS,
