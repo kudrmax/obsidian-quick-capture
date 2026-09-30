@@ -1,6 +1,7 @@
 import { App, Modal, Platform } from "obsidian";
 import { CaptureService } from "../application/CaptureService";
 import { Destination } from "../domain/CaptureMode";
+import { AudioPlayer } from "../infrastructure/HtmlAudioPlayer";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import { CaptureSettings } from "../settings";
 import { CaptureScreen } from "./CaptureScreen";
@@ -9,6 +10,7 @@ import { CaptureSuggest } from "./CaptureSuggest";
 export interface CaptureModalDependencies {
 	service: CaptureService;
 	createRecorder: () => AudioRecorder;
+	createPlayer: () => AudioPlayer;
 	settings: () => CaptureSettings;
 	destination: Destination;
 	onDestinationChange: (id: string) => void;
@@ -32,6 +34,7 @@ export class CaptureModal extends Modal {
 		this.screen = new CaptureScreen(this.contentEl, {
 			service: this.deps.service,
 			createRecorder: this.deps.createRecorder,
+			createPlayer: this.deps.createPlayer,
 			settings: this.deps.settings,
 			initial: this.deps.destination,
 			onDestinationChange: this.deps.onDestinationChange,

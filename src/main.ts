@@ -2,6 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
 import { systemClock } from "./domain/Clock";
 import { listDestinations, markUsed, pickDestination } from "./domain/CaptureMode";
+import { HtmlAudioPlayer } from "./infrastructure/HtmlAudioPlayer";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
 import { ObsidianAttachments } from "./infrastructure/ObsidianAttachments";
 import { ObsidianDailyNotes } from "./infrastructure/ObsidianDailyNotes";
@@ -43,6 +44,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 			new CaptureModal(this.app, {
 				service,
 				createRecorder: () => new MediaAudioRecorder(),
+				createPlayer: () => new HtmlAudioPlayer(),
 				settings: () => this.settings,
 				destination,
 				onDestinationChange: (id) => {
