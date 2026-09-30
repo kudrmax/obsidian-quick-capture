@@ -34,7 +34,7 @@ export class Waveform {
 		this.draw();
 	}
 
-	draw(progress: number | null = null): void {
+	draw(progress: number | null = null, shift = 0): void {
 		const ratio = window.devicePixelRatio || 1;
 		const width = this.canvas.clientWidth;
 		const height = this.canvas.clientHeight;
@@ -55,9 +55,9 @@ export class Waveform {
 		const played = style.getPropertyValue("--dqc-wave-played").trim() || color;
 		const step = BAR_WIDTH + BAR_GAP;
 		const visible = Math.floor(width / step);
-		const bars = progress === null ? lastBars(this.levels, visible) : fitBars(this.levels, visible);
+		const bars = progress === null ? lastBars(this.levels, visible + 1) : fitBars(this.levels, visible);
 		for (let i = 0; i < bars.length; i++) {
-			const x = width - (bars.length - i) * step;
+			const x = width - (bars.length - i + shift) * step;
 			const barHeight = Math.max(MIN_BAR_HEIGHT, bars[i] * (height - 8));
 			ctx.fillStyle = progress !== null && (i + 0.5) / bars.length <= progress ? played : color;
 			ctx.beginPath();
