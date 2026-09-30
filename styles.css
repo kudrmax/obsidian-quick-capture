@@ -658,6 +658,7 @@ body.is-mobile .dqc-controls {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	margin-top: 4px;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
@@ -721,12 +722,14 @@ body.is-mobile .dqc-controls {
 	font-size: var(--font-ui-smaller);
 }
 
-.dqc-line-middle {
-	flex: none;
-	width: 36px;
-	text-align: center;
+.dqc-line-header {
+	margin: 8px 0 2px;
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
+}
+
+.dqc-line-header span:not(.dqc-line-name) {
+	flex: 1 1 0;
 }
 
 .dqc-hint {

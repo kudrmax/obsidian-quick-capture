@@ -247,7 +247,6 @@ export class SettingsTab extends PluginSettingTab {
 		const pair = (name: string, prefix: TextFormatKey, suffix: TextFormatKey) => {
 			const row = namedLine(body, name);
 			text(row, prefix);
-			row.createSpan({ cls: "dqc-line-middle", text: name.toLowerCase() });
 			text(row, suffix);
 		};
 
@@ -260,6 +259,10 @@ export class SettingsTab extends PluginSettingTab {
 			options.setLevel(value);
 			return this.changed();
 		});
+		const columns = namedLine(body, "");
+		columns.addClass("dqc-line-header");
+		columns.createSpan({ text: "Prefix" });
+		columns.createSpan({ text: "Suffix" });
 		pair("Text", "textPrefix", "textSuffix");
 		pair("Audio", "audioPrefix", "audioSuffix");
 		hint(body, HEADING_HINT);
@@ -454,10 +457,10 @@ export class SettingsTab extends PluginSettingTab {
 
 const DEFAULT_PLACEHOLDERS: FormatTexts = {
 	heading: "No heading, e.g. Journal",
-	textPrefix: "prefix",
-	textSuffix: "suffix",
-	audioPrefix: "prefix",
-	audioSuffix: "e.g. #transcribe",
+	textPrefix: "empty",
+	textSuffix: "empty",
+	audioPrefix: "empty",
+	audioSuffix: "empty, e.g. #transcribe",
 };
 
 function modeKey(mode: CaptureMode): string {
