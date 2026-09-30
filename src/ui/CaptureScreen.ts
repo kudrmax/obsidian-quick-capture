@@ -7,6 +7,7 @@ import { Destination, listDestinations, modeTagGroups, pickDestination, retainTa
 import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
 import { ModePicker } from "./ModePicker";
+import { SampleTicker } from "./SampleTicker";
 import { hasQuickTags, TagPicker } from "./TagPicker";
 import { Waveform } from "./Waveform";
 
@@ -70,7 +71,8 @@ export class CaptureScreen {
 	private pendingRecording: Promise<AudioRecording> | null = null;
 	private sendingAudio = false;
 	private destroyed = false;
-	private sampleTimer: number | null = null;
+	private sampleFrame: number | null = null;
+	private readonly ticker = new SampleTicker(SAMPLE_INTERVAL_MS);
 	private playbackTimer: number | null = null;
 	private stoppedElapsedMs = 0;
 	private touchStart: { x: number; y: number } | null = null;
@@ -377,16 +379,20 @@ export class CaptureScreen {
 
 	private startSampling(): void {
 		this.stopSampling();
-		this.sampleTimer = window.setInterval(() => {
-			this.waveform.push(this.recorder?.level() ?? 0);
-			this.waveform.draw();
-			this.renderTimer();
-		}, SAMPLE_INTERVAL_MS);
+		this.ticker.start(performance.now());
+		const frame = (now: number) => {
+			const { samples, fraction } = this.ticker.tick(now);
+			for (let i = 0; i < samples; i++) this.waveform.push(this.recorder?.level() ?? 0);
+			this.waveform.draw(null, fraction);
+			if (samples > 0) this.renderTimer();
+			this.sampleFrame = window.requestAnimationFrame(frame);
+		};
+		this.sampleFrame = window.requestAnimationFrame(frame);
 	}
 
 	private stopSampling(): void {
-		if (this.sampleTimer !== null) window.clearInterval(this.sampleTimer);
-		this.sampleTimer = null;
+		if (this.sampleFrame !== null) window.cancelAnimationFrame(this.sampleFrame);
+		this.sampleFrame = null;
 	}
 
 	private currentElapsedMs(): number {
