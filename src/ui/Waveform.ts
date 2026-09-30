@@ -3,6 +3,10 @@ const BAR_GAP = 2;
 const MIN_BAR_HEIGHT = 2;
 const MAX_LEVELS = 60_000;
 
+export function lastBars(levels: number[], count: number): number[] {
+	return levels.slice(Math.max(0, levels.length - count));
+}
+
 export function fitBars(levels: number[], count: number): number[] {
 	if (levels.length <= count) return [...levels];
 	return Array.from({ length: count }, (_, bar) => {
@@ -51,7 +55,7 @@ export class Waveform {
 		const played = style.getPropertyValue("--dqc-wave-played").trim() || color;
 		const step = BAR_WIDTH + BAR_GAP;
 		const visible = Math.floor(width / step);
-		const bars = progress === null ? this.levels.slice(this.levels.length - visible) : fitBars(this.levels, visible);
+		const bars = progress === null ? lastBars(this.levels, visible) : fitBars(this.levels, visible);
 		for (let i = 0; i < bars.length; i++) {
 			const x = width - (bars.length - i) * step;
 			const barHeight = Math.max(MIN_BAR_HEIGHT, bars[i] * (height - 8));

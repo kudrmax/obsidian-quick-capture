@@ -17,7 +17,7 @@ export class ModePicker {
 			if (!(event.target as HTMLElement).closest("button")) this.close();
 		});
 		this.resizeObserver = new ResizeObserver(() => {
-			if (this.isOpen()) this.placeUnderAnchor();
+			this.reposition();
 		});
 		this.resizeObserver.observe(screenEl);
 	}
@@ -40,6 +40,10 @@ export class ModePicker {
 		this.placeUnderAnchor();
 		this.screenEl.addClass("is-picking-mode");
 		this.onChange();
+	}
+
+	reposition(): void {
+		if (this.isOpen()) this.placeUnderAnchor();
 	}
 
 	close(): void {

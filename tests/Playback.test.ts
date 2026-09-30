@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mimeTypeFor, playbackProgress } from "../src/infrastructure/HtmlAudioPlayer";
-import { fitBars } from "../src/ui/Waveform";
+import { fitBars, lastBars } from "../src/ui/Waveform";
 
 describe("fitBars", () => {
 	it("keeps a recording that already fits", () => {
@@ -17,6 +17,24 @@ describe("fitBars", () => {
 
 	it("returns nothing when there is no room", () => {
 		expect(fitBars([0.5], 0)).toEqual([]);
+	});
+});
+
+describe("lastBars", () => {
+	it("keeps every bar while the recording is shorter than the room", () => {
+		expect(lastBars([1, 2, 3], 4)).toEqual([1, 2, 3]);
+	});
+
+	it("keeps every bar past half of the room", () => {
+		expect(lastBars([1, 2, 3, 4, 5, 6], 8)).toEqual([1, 2, 3, 4, 5, 6]);
+	});
+
+	it("keeps the newest bars once the room is full", () => {
+		expect(lastBars([1, 2, 3, 4, 5], 3)).toEqual([3, 4, 5]);
+	});
+
+	it("returns nothing when there is no room", () => {
+		expect(lastBars([1, 2], 0)).toEqual([]);
 	});
 });
 
