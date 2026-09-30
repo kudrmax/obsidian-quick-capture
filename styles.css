@@ -12,9 +12,10 @@
 	background: var(--background-primary);
 }
 
-body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
-	height: calc(100vh - var(--keyboard-height, 0px));
-	transition: height 250ms cubic-bezier(0.12, 0, 0.44, 0.99);
+body.is-mobile .dqc-modal .modal-content {
+	box-sizing: border-box;
+	padding-bottom: var(--keyboard-height, 0px);
+	transition: padding-bottom 250ms cubic-bezier(0.12, 0, 0.44, 0.99);
 }
 
 .dqc-modal .modal-close-button,
@@ -32,6 +33,7 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 .dqc-screen {
 	--dqc-wave-color: var(--color-red);
 	--dqc-wave-baseline: var(--background-modifier-border);
+	--dqc-wave-played: var(--color-red);
 	--dqc-primary-size: 76px;
 	--dqc-secondary-size: 60px;
 	position: relative;
@@ -185,6 +187,10 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 	animation: dqc-pulse 1.2s ease-in-out infinite;
 }
 
+.dqc-screen.is-playing .dqc-status::before {
+	background: var(--color-red);
+}
+
 @keyframes dqc-pulse {
 	50% {
 		opacity: 0.25;
@@ -213,6 +219,7 @@ body.is-mobile .modal-container.dqc-modal-container .modal.dqc-modal {
 	align-items: center;
 	gap: 24px;
 	padding: 12px 20px max(20px, env(safe-area-inset-bottom));
+	transition: padding-bottom 250ms cubic-bezier(0.12, 0, 0.44, 0.99);
 }
 
 .dqc-screen.is-keyboard-visible .dqc-controls {

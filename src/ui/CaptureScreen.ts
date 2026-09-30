@@ -1,6 +1,7 @@
 import { Notice, setIcon } from "obsidian";
 import { CaptureError, CaptureService, TargetError } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
+import { AudioPlayer, playbackProgress } from "../infrastructure/HtmlAudioPlayer";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import { Destination, listDestinations, modeTagGroups, pickDestination, retainTags } from "../domain/CaptureMode";
 import { highlightSegments } from "../domain/Highlight";
@@ -12,6 +13,7 @@ import { Waveform } from "./Waveform";
 export interface CaptureScreenOptions {
 	service: CaptureService;
 	createRecorder: () => AudioRecorder;
+	createPlayer: () => AudioPlayer;
 	settings: () => CaptureSettings;
 	initial: Destination;
 	onDestinationChange: (id: string) => void;
@@ -54,6 +56,8 @@ export class CaptureScreen {
 	private readonly leftSlot: HTMLElement;
 	private readonly centerSlot: HTMLElement;
 	private readonly confirmEl: HTMLElement;
+	private readonly playSlot: HTMLElement;
+	private readonly player: AudioPlayer;
 	private readonly waveform: Waveform;
 	private readonly selectedTags = new Set<string>();
 	private readonly tagPicker: TagPicker;
@@ -67,11 +71,13 @@ export class CaptureScreen {
 	private sendingAudio = false;
 	private destroyed = false;
 	private sampleTimer: number | null = null;
+	private playbackTimer: number | null = null;
 	private stoppedElapsedMs = 0;
 	private touchStart: { x: number; y: number } | null = null;
 
 	constructor(container: HTMLElement, private readonly options: CaptureScreenOptions) {
 		this.current = options.initial;
+		this.player = options.createPlayer();
 		this.root = container.createDiv({ cls: "dqc-screen" });
 		this.root.addEventListener("touchstart", (event) => this.onTouchStart(event), { passive: true });
 		this.root.addEventListener("touchend", (event) => this.onTouchEnd(event), { passive: true });
@@ -101,6 +107,7 @@ export class CaptureScreen {
 		this.statusEl = recorderView.createDiv({ cls: "dqc-status" });
 		this.timerEl = recorderView.createDiv({ cls: "dqc-timer", text: "00:00" });
 		this.waveform = new Waveform(recorderView.createEl("canvas", { cls: "dqc-wave" }));
+		this.playSlot = recorderView.createDiv({ cls: "dqc-slot dqc-slot-side dqc-slot-play" });
 
 		const footer = this.root.createDiv({ cls: "dqc-footer" });
 		const controls = footer.createDiv({ cls: "dqc-controls" });
@@ -262,6 +269,8 @@ export class CaptureScreen {
 	}
 
 	private releaseRecorder(): void {
+		this.stopPlayback();
+		this.player.release();
 		this.stopSampling();
 		this.recorder?.cancel();
 		this.recorder = null;
@@ -277,6 +286,7 @@ export class CaptureScreen {
 			return;
 		}
 		this.sendingAudio = previous === "stopped";
+		this.stopPlayback();
 		this.tagPicker.close();
 		this.modePicker.close();
 		this.setState("sending");
@@ -309,6 +319,7 @@ export class CaptureScreen {
 	}
 
 	private resetAfterSend(): void {
+		this.player.release();
 		this.pendingRecording = null;
 		this.selectedTags.clear();
 		this.textarea.value = "";
@@ -321,6 +332,46 @@ export class CaptureScreen {
 		}
 		this.render();
 		this.focus();
+	}
+
+	private async togglePlayback(): Promise<void> {
+		if (this.isPlaying()) {
+			this.stopPlayback();
+			return;
+		}
+		try {
+			await this.player.play(await this.requirePendingRecording(), () => this.stopPlayback());
+		} catch (error) {
+			new Notice(`Could not play the recording: ${errorMessage(error)}`);
+			return;
+		}
+		if (this.state !== "stopped") {
+			this.player.pause();
+			return;
+		}
+		this.playbackTimer = window.setInterval(() => this.renderPlayback(), SAMPLE_INTERVAL_MS);
+		this.render();
+	}
+
+	private stopPlayback(): void {
+		this.player.pause();
+		if (this.playbackTimer !== null) window.clearInterval(this.playbackTimer);
+		this.playbackTimer = null;
+		if (this.state === "stopped") this.render();
+	}
+
+	private isPlaying(): boolean {
+		return this.playbackTimer !== null;
+	}
+
+	private renderPlayback(): void {
+		this.renderTimer();
+		this.drawWaveform();
+	}
+
+	private drawWaveform(): void {
+		if (this.state !== "stopped") this.waveform.draw();
+		else this.waveform.draw(playbackProgress(this.player.positionMs(), this.stoppedElapsedMs));
 	}
 
 	private startSampling(): void {
@@ -338,6 +389,8 @@ export class CaptureScreen {
 	}
 
 	private currentElapsedMs(): number {
+		const played = this.state === "stopped" ? this.player.positionMs() : 0;
+		if (played > 0) return Math.min(played, this.stoppedElapsedMs);
 		return this.recorder?.elapsedMs() ?? this.stoppedElapsedMs;
 	}
 
@@ -385,6 +438,7 @@ export class CaptureScreen {
 	private render(): void {
 		this.root.dataset.state = this.state;
 		this.root.dataset.mode = this.isAudioMode() ? "audio" : "text";
+		this.root.toggleClass("is-playing", this.isPlaying());
 		this.textarea.readOnly = this.state === "sending";
 		this.renderTitle();
 		if (!this.isAudioMode()) this.renderText();
@@ -394,13 +448,13 @@ export class CaptureScreen {
 				starting: "Starting",
 				recording: "Recording",
 				paused: "Paused",
-				stopped: "Ready to send",
+				stopped: this.isPlaying() ? "Playing" : "Ready to send",
 				sending: "Sending",
 			}[this.state],
 		);
 		this.renderTimer();
 		this.renderControls();
-		window.requestAnimationFrame(() => this.waveform.draw());
+		window.requestAnimationFrame(() => this.drawWaveform());
 	}
 
 	private renderTitle(): void {
@@ -439,6 +493,17 @@ export class CaptureScreen {
 		this.renderTagControl();
 		this.renderControl(this.leftSlot, left);
 		this.renderControl(this.centerSlot, center);
+		this.renderControl(
+			this.playSlot,
+			this.state === "stopped"
+				? {
+						icon: this.isPlaying() ? "pause" : "play",
+						label: this.isPlaying() ? "Pause playback" : "Listen",
+						tone: "secondary",
+						onClick: () => void this.togglePlayback(),
+					}
+				: null,
+		);
 	}
 
 	private renderTagControl(): void {

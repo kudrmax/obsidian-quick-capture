@@ -1,6 +1,16 @@
 const BAR_WIDTH = 3;
 const BAR_GAP = 2;
 const MIN_BAR_HEIGHT = 2;
+const MAX_LEVELS = 60_000;
+
+export function fitBars(levels: number[], count: number): number[] {
+	if (levels.length <= count) return [...levels];
+	return Array.from({ length: count }, (_, bar) => {
+		const start = Math.floor((bar * levels.length) / count);
+		const end = Math.floor(((bar + 1) * levels.length) / count);
+		return Math.max(...levels.slice(start, end));
+	});
+}
 
 export class Waveform {
 	private readonly levels: number[] = [];
@@ -12,7 +22,7 @@ export class Waveform {
 
 	push(level: number): void {
 		this.levels.push(level);
-		if (this.levels.length > 2000) this.levels.splice(0, 1000);
+		if (this.levels.length > MAX_LEVELS) this.levels.splice(0, MAX_LEVELS / 2);
 	}
 
 	clear(): void {
@@ -20,7 +30,7 @@ export class Waveform {
 		this.draw();
 	}
 
-	draw(): void {
+	draw(progress: number | null = null): void {
 		const ratio = window.devicePixelRatio || 1;
 		const width = this.canvas.clientWidth;
 		const height = this.canvas.clientHeight;
@@ -37,13 +47,15 @@ export class Waveform {
 		ctx.fillStyle = style.getPropertyValue("--dqc-wave-baseline").trim() || "#888";
 		ctx.fillRect(0, middle - 0.5, width, 1);
 
-		ctx.fillStyle = style.getPropertyValue("--dqc-wave-color").trim() || "#e5484d";
+		const color = style.getPropertyValue("--dqc-wave-color").trim() || "#e5484d";
+		const played = style.getPropertyValue("--dqc-wave-played").trim() || color;
 		const step = BAR_WIDTH + BAR_GAP;
 		const visible = Math.floor(width / step);
-		const start = Math.max(0, this.levels.length - visible);
-		for (let i = start; i < this.levels.length; i++) {
-			const x = width - (this.levels.length - i) * step;
-			const barHeight = Math.max(MIN_BAR_HEIGHT, this.levels[i] * (height - 8));
+		const bars = progress === null ? this.levels.slice(this.levels.length - visible) : fitBars(this.levels, visible);
+		for (let i = 0; i < bars.length; i++) {
+			const x = width - (bars.length - i) * step;
+			const barHeight = Math.max(MIN_BAR_HEIGHT, bars[i] * (height - 8));
+			ctx.fillStyle = progress !== null && (i + 0.5) / bars.length <= progress ? played : color;
 			ctx.beginPath();
 			ctx.roundRect(x, middle - barHeight / 2, BAR_WIDTH, barHeight, BAR_WIDTH / 2);
 			ctx.fill();
