@@ -54,7 +54,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 				onCaptured: (id) => {
 					if (markUsed(this.settings.modes, id, Date.now())) void this.saveSettings();
 				},
-				openNote: (path) => void this.app.workspace.openLinkText(path, "", false),
+				openNote: ({ path, line }) => void this.app.workspace.openLinkText(path, "", false, { eState: { line } }),
 				linkSourcePath: (destination) => targets.previewPath(destination.target),
 			}).open();
 		};

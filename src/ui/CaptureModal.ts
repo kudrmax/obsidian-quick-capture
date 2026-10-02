@@ -1,5 +1,5 @@
 import { App, Modal, Platform } from "obsidian";
-import { CaptureService } from "../application/CaptureService";
+import { CapturedEntry, CaptureService } from "../application/CaptureService";
 import { Destination } from "../domain/CaptureMode";
 import { AudioPlayer } from "../infrastructure/HtmlAudioPlayer";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
@@ -15,7 +15,7 @@ export interface CaptureModalDependencies {
 	destination: Destination;
 	onDestinationChange: (id: string) => void;
 	onCaptured: (id: string) => void;
-	openNote: (path: string) => void;
+	openNote: (entry: CapturedEntry) => void;
 	linkSourcePath: (destination: Destination) => string;
 }
 

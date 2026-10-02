@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { insertIntoSection, parseHeading } from "../src/domain/SectionInserter";
+import { insertEntry, insertIntoSection, parseHeading } from "../src/domain/SectionInserter";
 
 const ins = (note: string, heading: string, entry: string, level = 2) =>
 	insertIntoSection(note, parseHeading(heading, level), entry);
@@ -87,6 +87,39 @@ describe("insertIntoSection", () => {
 
 	it("keeps a trailing hash that is part of the heading text", () => {
 		expect(ins("## C#\n- a\n## T\n", "C#", "- b")).toBe("## C#\n- a\n- b\n## T\n");
+	});
+});
+
+describe("insertEntry", () => {
+	const lastEntryLine = (note: string, heading: string, entry: string) => {
+		const { content, line } = insertEntry(note, parseHeading(heading, 2), entry);
+		return { line, text: content.split(/\r?\n/)[line] };
+	};
+
+	it("points at the entry inside a matched section", () => {
+		expect(lastEntryLine("# Day\n## Journal\n- a\n\n## Tasks\n", "Journal", "- b")).toEqual({ line: 3, text: "- b" });
+	});
+
+	it("points at the entry under a heading it created", () => {
+		expect(lastEntryLine("text\n", "Journal", "- b")).toEqual({ line: 4, text: "- b" });
+	});
+
+	it("points at the entry in an empty section", () => {
+		expect(lastEntryLine("## Journal\n## Tasks\n", "Journal", "- e")).toEqual({ line: 2, text: "- e" });
+	});
+
+	it("points at the entry in an empty note", () => {
+		expect(lastEntryLine("", "Journal", "- b")).toEqual({ line: 2, text: "- b" });
+		expect(lastEntryLine("", "", "- b")).toEqual({ line: 0, text: "- b" });
+	});
+
+	it("points at the last line of a multiline entry", () => {
+		expect(lastEntryLine("- a\r\n", "", "- b\nmore")).toEqual({ line: 2, text: "more" });
+	});
+
+	it("gives the same content as insertIntoSection", () => {
+		const note = "## Journal\n- a\n## Tasks\n";
+		expect(insertEntry(note, parseHeading("Journal", 2), "- b").content).toBe(ins(note, "Journal", "- b"));
 	});
 });
 

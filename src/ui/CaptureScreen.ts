@@ -1,5 +1,5 @@
 import { Notice, setIcon } from "obsidian";
-import { CaptureError, CaptureService, TargetError } from "../application/CaptureService";
+import { CapturedEntry, CaptureError, CaptureService, TargetError } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
 import { AudioPlayer, playbackProgress } from "../infrastructure/HtmlAudioPlayer";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
@@ -26,7 +26,7 @@ export interface CaptureScreenOptions {
 	initial: Destination;
 	onDestinationChange: (id: string) => void;
 	onCaptured: (id: string) => void;
-	openNote: (path: string) => void;
+	openNote: (entry: CapturedEntry) => void;
 	autoFocus: boolean;
 	decorateTextInput: (textarea: HTMLTextAreaElement, destination: () => Destination) => void;
 	onClose: () => void;
@@ -295,9 +295,9 @@ export class CaptureScreen {
 		this.tagPicker.close();
 		this.modePicker.close();
 		this.setState("sending");
-		let notePath: string;
+		let captured: CapturedEntry;
 		try {
-			notePath = this.sendingAudio
+			captured = this.sendingAudio
 				? await this.options.service.captureAudio(destination, await this.requirePendingRecording(), tags)
 				: await this.options.service.captureText(destination, this.textarea.value, tags);
 		} catch (error) {
@@ -317,7 +317,7 @@ export class CaptureScreen {
 		}
 		this.options.onCaptured(destination.id);
 		new Notice(`Added to ${destination.title}`);
-		this.resetAfterSend(destination, notePath);
+		this.resetAfterSend(destination, captured);
 	}
 
 	private requirePendingRecording(): Promise<AudioRecording> {
@@ -325,7 +325,7 @@ export class CaptureScreen {
 		return this.pendingRecording;
 	}
 
-	private resetAfterSend(destination: Destination, notePath: string): void {
+	private resetAfterSend(destination: Destination, captured: CapturedEntry): void {
 		this.player.release();
 		this.pendingRecording = null;
 		this.selectedTags.clear();
@@ -340,7 +340,7 @@ export class CaptureScreen {
 			return;
 		}
 		this.options.onClose();
-		if (afterSend === "open") this.options.openNote(notePath);
+		if (afterSend === "open") this.options.openNote(captured);
 	}
 
 	private async togglePlayback(): Promise<void> {

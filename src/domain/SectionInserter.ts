@@ -25,10 +25,22 @@ export function parseHeading(heading: string, fallbackLevel: number): HeadingTar
 	return { text, level: match?.[1]?.length ?? fallbackLevel };
 }
 
+export interface Insertion {
+	content: string;
+	line: number;
+}
+
 export function insertIntoSection(note: string, heading: HeadingTarget | null, entry: string): string {
+	return insertEntry(note, heading, entry).content;
+}
+
+export function insertEntry(note: string, heading: HeadingTarget | null, entry: string): Insertion {
 	const entryLines = entry.split(/\r?\n/);
 	const headingLines = heading ? [`${"#".repeat(heading.level)} ${heading.text}`, ""] : [];
-	if (note === "") return [...headingLines, ...entryLines].join("\n");
+	if (note === "") {
+		const lines = [...headingLines, ...entryLines];
+		return { content: lines.join("\n"), line: lines.length - 1 };
+	}
 
 	const { lines, separators } = splitNote(note);
 	const headings = findHeadings(lines);
@@ -48,7 +60,7 @@ function insertIntoMatchedSection(
 	headings: Heading[],
 	match: Heading,
 	entryLines: string[],
-): string {
+): Insertion {
 	const next = headings.find((h) => h.line > match.line && h.level <= match.level);
 	const sectionEnd = next ? next.line : endInsertIndex(lines);
 	for (let i = sectionEnd - 1; i > match.line; i--) {
@@ -59,11 +71,11 @@ function insertIntoMatchedSection(
 	return insertLines(lines, separators, afterHeading, ["", ...entryLines]);
 }
 
-function insertLines(lines: string[], separators: string[], insertAt: number, inserted: string[]): string {
+function insertLines(lines: string[], separators: string[], insertAt: number, inserted: string[]): Insertion {
 	const separator = separators[insertAt - 1] ?? separators[0] ?? "\n";
 	lines.splice(insertAt, 0, ...inserted);
 	separators.splice(insertAt, 0, ...inserted.map(() => separator));
-	return joinNote(lines, separators);
+	return { content: joinNote(lines, separators), line: insertAt + inserted.length - 1 };
 }
 
 function endInsertIndex(lines: string[]): number {

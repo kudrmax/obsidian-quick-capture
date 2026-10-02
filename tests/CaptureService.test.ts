@@ -73,14 +73,15 @@ describe("CaptureService", () => {
 		expect(notes.files.get(NOTE)).toBe("- 21:37 milk #inbox");
 	});
 
-	it("tells which note got the text", async () => {
+	it("tells which note and line got the text", async () => {
 		const { service } = setup();
-		expect(await service.captureText(BOOK, "quote")).toBe("Books/Book.md");
+		expect(await service.captureText(BOOK, "quote")).toEqual({ path: "Books/Book.md", line: 2 });
 	});
 
-	it("tells which note got the recording", async () => {
-		const { service } = setup();
-		expect(await service.captureAudio(DAILY, audio)).toBe(NOTE);
+	it("tells which note and line got the recording", async () => {
+		const { notes, service } = setup();
+		notes.files.set(NOTE, "- earlier\n");
+		expect(await service.captureAudio(DAILY, audio)).toEqual({ path: NOTE, line: 1 });
 	});
 
 	it("rejects blank text", async () => {
