@@ -56,7 +56,6 @@ export class CaptureScreen {
 	private readonly root: HTMLElement;
 	private readonly textarea: HTMLTextAreaElement;
 	private readonly highlightEl: HTMLElement;
-	private readonly bodyEl: HTMLElement;
 	private readonly titleEl: HTMLElement;
 	private readonly statusEl: HTMLElement;
 	private readonly timerEl: HTMLElement;
@@ -93,7 +92,6 @@ export class CaptureScreen {
 		this.root.addEventListener("touchend", (event) => this.onTouchEnd(event), { passive: true });
 
 		const body = this.root.createDiv({ cls: "dqc-body" });
-		this.bodyEl = body;
 		body.addEventListener("click", (event) => {
 			if (this.state === "input" && event.target !== this.textarea) this.textarea.focus();
 		});
@@ -441,16 +439,8 @@ export class CaptureScreen {
 
 	private fitTextHeight(): void {
 		this.textarea.style.height = "auto";
-		this.textarea.style.height = `${Math.min(this.textarea.scrollHeight, this.availableTextHeight())}px`;
+		this.textarea.style.height = `${this.textarea.scrollHeight}px`;
 		this.highlightEl.scrollTop = this.textarea.scrollTop;
-	}
-
-	private availableTextHeight(): number {
-		const style = getComputedStyle(this.bodyEl);
-		const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-		const title = this.titleEl.offsetHeight + parseFloat(getComputedStyle(this.titleEl).marginBottom);
-		const available = this.bodyEl.clientHeight - padding - title;
-		return available > 0 ? available : Number.POSITIVE_INFINITY;
 	}
 
 	private setState(state: State): void {
