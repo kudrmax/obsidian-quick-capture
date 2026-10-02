@@ -39,12 +39,12 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, tagGroupIds: [] };
+const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", tagGroupIds: [] };
 const BOOKS_MODE: CaptureMode = {
 	id: "books",
 	title: "Книги",
 	target: { type: "files", files: [{ id: "book", alias: "Book", path: "Books/Book.md", lastUsedAt: 0 }] },
-	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " },
+	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " }, afterSend: "default",
 	tagGroupIds: [],
 };
 const DAILY: Destination = { id: "daily", mode: DAILY_MODE, title: "29 September 2026", target: { type: "daily" } };
@@ -71,6 +71,16 @@ describe("CaptureService", () => {
 		const { notes, service } = setup({ textSuffix: " #inbox" });
 		await service.captureText(DAILY, "milk");
 		expect(notes.files.get(NOTE)).toBe("- 21:37 milk #inbox");
+	});
+
+	it("tells which note got the text", async () => {
+		const { service } = setup();
+		expect(await service.captureText(BOOK, "quote")).toBe("Books/Book.md");
+	});
+
+	it("tells which note got the recording", async () => {
+		const { service } = setup();
+		expect(await service.captureAudio(DAILY, audio)).toBe(NOTE);
 	});
 
 	it("rejects blank text", async () => {

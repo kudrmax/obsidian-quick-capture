@@ -26,15 +26,16 @@ export class CaptureService {
 		this.formatter = new EntryFormatter(deps.clock);
 	}
 
-	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<void> {
+	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<string> {
 		const content = text.trimEnd();
 		if (content.trim() === "") throw new CaptureError("Nothing to add");
 		const notePath = await this.resolveTarget(destination);
 		const format = resolveFormat(this.deps.settings().defaults, destination.mode.overrides);
 		await this.append(notePath, format.heading, format.text, content, tags);
+		return notePath;
 	}
 
-	async captureAudio(destination: Destination, recording: AudioRecording, tags: readonly string[] = []): Promise<void> {
+	async captureAudio(destination: Destination, recording: AudioRecording, tags: readonly string[] = []): Promise<string> {
 		if (recording.data.byteLength === 0 || recording.durationMs < MIN_RECORDING_MS) {
 			throw new CaptureError("Recording is empty");
 		}
@@ -49,6 +50,7 @@ export class CaptureService {
 			await this.deps.attachments.discard(saved.path);
 			throw error;
 		}
+		return notePath;
 	}
 
 	private resolveTarget(destination: Destination): Promise<string> {

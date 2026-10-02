@@ -9,6 +9,7 @@ import {
 	modeTagGroups,
 	NO_OVERRIDES,
 	pickDestination,
+	resolveAfterSend,
 	resolveFormat,
 	retainTags,
 } from "../src/domain/CaptureMode";
@@ -23,7 +24,7 @@ const DEFAULTS: EntryFormat = {
 };
 
 function mode(overrides: Partial<CaptureMode> = {}): CaptureMode {
-	return { id: "m", title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, tagGroupIds: [], ...overrides };
+	return { id: "m", title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", tagGroupIds: [], ...overrides };
 }
 
 describe("resolveFormat", () => {
@@ -169,5 +170,15 @@ describe("retainTags", () => {
 	it("keeps only tags offered by the groups", () => {
 		const groups = [{ tags: [{ tag: " #like " }, { tag: "#idea" }] }];
 		expect(retainTags(["#like", "#quote"], groups)).toEqual(["#like"]);
+	});
+});
+
+describe("resolveAfterSend", () => {
+	it("follows the general choice by default", () => {
+		expect(resolveAfterSend("stay", mode())).toBe("stay");
+	});
+
+	it("prefers the mode's own choice", () => {
+		expect(resolveAfterSend("close", mode({ afterSend: "open" }))).toBe("open");
 	});
 });

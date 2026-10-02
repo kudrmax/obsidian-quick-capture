@@ -21,6 +21,10 @@ export interface FormatOverrides {
 	audioSuffix: string;
 }
 
+export type AfterSend = "close" | "stay" | "open";
+
+export type AfterSendChoice = "default" | AfterSend;
+
 export type NoteTarget = { type: "daily" } | { type: "file"; path: string };
 
 export interface ModeFile {
@@ -37,6 +41,7 @@ export interface CaptureMode {
 	title: string;
 	target: ModeTarget;
 	overrides: FormatOverrides;
+	afterSend: AfterSendChoice;
 	tagGroupIds: string[];
 }
 
@@ -77,6 +82,10 @@ export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides)
 			suffix: pick(overrides.audioSuffix, defaults.audioSuffix),
 		},
 	};
+}
+
+export function resolveAfterSend(defaultChoice: AfterSend, mode: CaptureMode): AfterSend {
+	return mode.afterSend === "default" ? defaultChoice : mode.afterSend;
 }
 
 export function modeTagGroups<G extends { id: string }>(groups: G[], mode: CaptureMode): G[] {

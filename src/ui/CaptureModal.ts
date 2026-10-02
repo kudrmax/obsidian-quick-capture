@@ -15,14 +15,13 @@ export interface CaptureModalDependencies {
 	destination: Destination;
 	onDestinationChange: (id: string) => void;
 	onCaptured: (id: string) => void;
+	openNote: (path: string) => void;
 	linkSourcePath: (destination: Destination) => string;
 }
 
 export class CaptureModal extends Modal {
 	private screen: CaptureScreen | null = null;
 	private closingConfirmed = false;
-	private readonly onKeyboardShow = () => this.screen?.setKeyboardVisible(true);
-	private readonly onKeyboardHide = () => this.screen?.setKeyboardVisible(false);
 
 	constructor(app: App, private readonly deps: CaptureModalDependencies) {
 		super(app);
@@ -39,6 +38,7 @@ export class CaptureModal extends Modal {
 			initial: this.deps.destination,
 			onDestinationChange: this.deps.onDestinationChange,
 			onCaptured: this.deps.onCaptured,
+			openNote: this.deps.openNote,
 			autoFocus: !Platform.isMobile || this.deps.settings().openKeyboardOnMobile,
 			decorateTextInput: (textarea, destination) =>
 				new CaptureSuggest(this.app, textarea, () => this.deps.linkSourcePath(destination())),
@@ -52,8 +52,6 @@ export class CaptureModal extends Modal {
 			this.screen?.submit();
 			return false;
 		});
-		window.addEventListener("keyboardWillShow", this.onKeyboardShow);
-		window.addEventListener("keyboardWillHide", this.onKeyboardHide);
 		this.screen.focus();
 		window.setTimeout(() => this.screen?.focus(), 50);
 	}
@@ -64,8 +62,6 @@ export class CaptureModal extends Modal {
 	}
 
 	override onClose(): void {
-		window.removeEventListener("keyboardWillShow", this.onKeyboardShow);
-		window.removeEventListener("keyboardWillHide", this.onKeyboardHide);
 		this.screen?.destroy();
 		this.contentEl.empty();
 	}

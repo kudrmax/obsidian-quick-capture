@@ -1,5 +1,7 @@
 import { App, DropdownComponent, ExtraButtonComponent, getIcon, Plugin, PluginSettingTab, setIcon, Setting, TextComponent } from "obsidian";
 import {
+	AfterSend,
+	AfterSendChoice,
 	CaptureMode,
 	EntryFormat,
 	HeadingLevelChoice,
@@ -13,7 +15,7 @@ import {
 import { systemClock } from "../domain/Clock";
 import { moveItem } from "../domain/ListOrder";
 import { EntryPreview, modeSummary, previewEntries } from "../domain/SettingsPreview";
-import { AfterSend, CaptureSettings, newId, QuickTag, TagGroup } from "../settings";
+import { CaptureSettings, newId, QuickTag, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
 import { IconPicker } from "./IconPicker";
 import { SettingsCard } from "./SettingsCard";
@@ -41,6 +43,11 @@ const LEVEL_OPTIONS = LEVELS.map((level): [string, string] => [String(level), `H
 const PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · spaces at the edges are kept";
 const HEADING_HINT = "Entries go to the end of the heading's section. A missing heading is created at the end of the note. No heading: end of the note.";
 const DEFAULTS_KEY = "defaults";
+const AFTER_SEND_OPTIONS: Record<AfterSend, string> = {
+	close: "Close the screen",
+	stay: "Stay for the next entry",
+	open: "Open the note",
+};
 
 export class SettingsTab extends PluginSettingTab {
 	private openCard: string | null = null;
@@ -79,6 +86,7 @@ export class SettingsTab extends PluginSettingTab {
 				title: "",
 				target: { type: "files", files: [emptyFile()] },
 				overrides: { ...NO_OVERRIDES },
+				afterSend: "default",
 				tagGroupIds: [],
 			};
 			this.settings.modes.push(mode);
@@ -113,6 +121,7 @@ export class SettingsTab extends PluginSettingTab {
 				previewEntries(resolveFormat(this.settings.defaults, mode.overrides), this.settings.embedAudio, systemClock, this.sampleTag(mode)),
 		});
 		this.modeTagGroups(body, mode);
+		this.modeAfterSend(body, mode);
 		this.modeFooter(body, mode, index);
 
 		this.refreshers.push(() => {
@@ -208,6 +217,19 @@ export class SettingsTab extends PluginSettingTab {
 				await this.changed();
 			});
 		});
+	}
+
+	private modeAfterSend(body: HTMLElement, mode: CaptureMode): void {
+		label(body, "After sending");
+		const dropdown = new DropdownComponent(line(body))
+			.addOption("default", `Default (${AFTER_SEND_OPTIONS[this.settings.afterSend]})`)
+			.addOptions(AFTER_SEND_OPTIONS)
+			.setValue(mode.afterSend)
+			.onChange((value) => {
+				mode.afterSend = value as AfterSendChoice;
+				return this.changed();
+			});
+		dropdown.selectEl.addClass("dqc-after-send");
 	}
 
 	private modeFooter(body: HTMLElement, mode: CaptureMode, index: number): void {
@@ -380,11 +402,11 @@ export class SettingsTab extends PluginSettingTab {
 			);
 		new Setting(containerEl).setName("After sending").addDropdown((dropdown) =>
 			dropdown
-				.addOptions({ close: "Close the screen", stay: "Stay for the next entry" })
+				.addOptions(AFTER_SEND_OPTIONS)
 				.setValue(this.settings.afterSend)
-				.onChange((value) => {
+				.onChange(async (value) => {
 					this.settings.afterSend = value as AfterSend;
-					return this.changed();
+					await this.saveAndRedraw();
 				}),
 		);
 		new Setting(containerEl)
