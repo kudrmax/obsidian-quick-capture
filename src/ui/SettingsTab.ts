@@ -478,7 +478,9 @@ export class SettingsTab extends PluginSettingTab {
 
 	private async saveAndRedraw(): Promise<void> {
 		await this.host.saveSettings();
+		const scrollTop = this.containerEl.scrollTop;
 		this.display();
+		this.containerEl.scrollTop = scrollTop;
 	}
 }
 

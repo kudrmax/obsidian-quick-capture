@@ -713,6 +713,7 @@ body.is-mobile .dqc-controls {
 
 .dqc-line select.dqc-choice {
 	max-width: 100%;
+	text-align: start;
 }
 
 .dqc-line-name {
