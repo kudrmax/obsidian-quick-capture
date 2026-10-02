@@ -72,8 +72,13 @@
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	padding: var(--dqc-footer-height, 140px) var(--dqc-gutter);
-	padding-bottom: calc(var(--dqc-footer-height, 140px) + var(--dqc-keyboard-lift));
+	padding: 12px var(--dqc-gutter) calc(var(--dqc-footer-height, 140px) + var(--dqc-keyboard-lift));
+}
+
+.dqc-body::before {
+	content: "";
+	flex: 0 1000 var(--dqc-footer-height, 140px);
+	min-height: 0;
 }
 
 .dqc-editor {
@@ -108,6 +113,7 @@
 .dqc-screen textarea.dqc-text:hover,
 .dqc-screen textarea.dqc-text:focus {
 	position: relative;
+	max-height: 100%;
 	resize: none;
 	overflow-y: auto;
 	scrollbar-width: none;
