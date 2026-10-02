@@ -1,7 +1,7 @@
 {
   "id": "quick-capture",
   "name": "Quick Capture",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.6.6",
   "description": "Fullscreen quick capture of text and voice into your daily note or any note.",
   "author": "kudrmax",
