@@ -1,4 +1,4 @@
-import { Destination, destinationProblem, resolveFormat } from "../domain/CaptureMode";
+import { Destination, destinationProblem, resolveEmbedAudio, resolveFormat } from "../domain/CaptureMode";
 import { Clock } from "../domain/Clock";
 import { EntryFormatter, EntryTemplate } from "../domain/EntryFormatter";
 import { HeadingTarget, insertEntry } from "../domain/SectionInserter";
@@ -47,7 +47,7 @@ export class CaptureService {
 		const notePath = await this.resolveTarget(destination);
 		const format = resolveFormat(settings.defaults, destination.mode.overrides);
 		const saved = await this.deps.attachments.save(this.recordingFileName(recording.extension), recording.data, notePath);
-		const content = `${settings.embedAudio ? "!" : ""}${saved.link}`;
+		const content = `${resolveEmbedAudio(settings.embedAudio, destination.mode) ? "!" : ""}${saved.link}`;
 		try {
 			return await this.append(notePath, format.heading, format.audio, content, tags);
 		} catch (error) {

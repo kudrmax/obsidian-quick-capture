@@ -39,12 +39,12 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", tagGroupIds: [] };
+const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [] };
 const BOOKS_MODE: CaptureMode = {
 	id: "books",
 	title: "Книги",
 	target: { type: "files", files: [{ id: "book", alias: "Book", path: "Books/Book.md", lastUsedAt: 0 }] },
-	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " }, afterSend: "default",
+	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " }, afterSend: "default", audioLink: "default",
 	tagGroupIds: [],
 };
 const DAILY: Destination = { id: "daily", mode: DAILY_MODE, title: "29 September 2026", target: { type: "daily" } };
@@ -99,6 +99,12 @@ describe("CaptureService", () => {
 	it("links audio without embedding when configured", async () => {
 		const { notes, service } = setup({}, { embedAudio: false });
 		await service.captureAudio(DAILY, audio);
+		expect(notes.files.get(NOTE)).toBe("- 21:37 [[Recording 20260929213705.m4a]]");
+	});
+
+	it("links audio the way the destination's mode asks", async () => {
+		const { notes, service } = setup({}, { embedAudio: true });
+		await service.captureAudio({ ...DAILY, mode: { ...DAILY_MODE, audioLink: "link" } }, audio);
 		expect(notes.files.get(NOTE)).toBe("- 21:37 [[Recording 20260929213705.m4a]]");
 	});
 

@@ -13,7 +13,7 @@ const DEFAULTS: EntryFormat = {
 };
 
 function mode(target: CaptureMode["target"], overrides = NO_OVERRIDES): CaptureMode {
-	return { id: "m", title: "", target, overrides, afterSend: "default", tagGroupIds: [] };
+	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [] };
 }
 
 const file = (alias: string, path: string) => ({ id: path, alias, path, lastUsedAt: 0 });

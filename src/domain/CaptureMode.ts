@@ -25,6 +25,8 @@ export type AfterSend = "close" | "stay" | "open";
 
 export type AfterSendChoice = "default" | AfterSend;
 
+export type AudioLinkChoice = "default" | "embed" | "link";
+
 export type NoteTarget = { type: "daily" } | { type: "file"; path: string };
 
 export interface ModeFile {
@@ -42,6 +44,7 @@ export interface CaptureMode {
 	target: ModeTarget;
 	overrides: FormatOverrides;
 	afterSend: AfterSendChoice;
+	audioLink: AudioLinkChoice;
 	tagGroupIds: string[];
 }
 
@@ -86,6 +89,10 @@ export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides)
 
 export function resolveAfterSend(defaultChoice: AfterSend, mode: CaptureMode): AfterSend {
 	return mode.afterSend === "default" ? defaultChoice : mode.afterSend;
+}
+
+export function resolveEmbedAudio(defaultEmbed: boolean, mode: CaptureMode): boolean {
+	return mode.audioLink === "default" ? defaultEmbed : mode.audioLink === "embed";
 }
 
 export function modeTagGroups<G extends { id: string }>(groups: G[], mode: CaptureMode): G[] {

@@ -54,7 +54,8 @@ export function loadSettings(saved: unknown): CaptureSettings {
 	return structuredClone(settings);
 }
 
-type SavedMode = Omit<CaptureMode, "afterSend"> & Partial<Pick<CaptureMode, "afterSend">>;
+type ModeChoices = "afterSend" | "audioLink";
+type SavedMode = Omit<CaptureMode, ModeChoices> & Partial<Pick<CaptureMode, ModeChoices>>;
 type SingleFileMode = Omit<SavedMode, "target"> & { target: { type: "file"; path: string } };
 
 interface SavedSettings extends Omit<CaptureSettings, "modes"> {
@@ -67,7 +68,7 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 	const { lastModeId, modes, ...rest } = { ...DEFAULT_SETTINGS, ...saved } as SavedSettings;
 	return {
 		...rest,
-		modes: modes.map((mode) => ({ afterSend: "default", ...toFilesMode(mode) })),
+		modes: modes.map((mode) => ({ afterSend: "default", audioLink: "default", ...toFilesMode(mode) })),
 		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
 	};
 }
@@ -107,5 +108,5 @@ function pickFormat(legacy: Partial<LegacySettings>): Partial<EntryFormat> {
 }
 
 function dailyMode(tagGroupIds: string[]): CaptureMode {
-	return { id: DAILY_MODE_ID, title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", tagGroupIds };
+	return { id: DAILY_MODE_ID, title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds };
 }
