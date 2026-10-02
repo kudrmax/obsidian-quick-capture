@@ -27,7 +27,7 @@ describe("loadSettings", () => {
 		expect(settings.defaults).toEqual(DEFAULT_SETTINGS.defaults);
 		expect(settings.tagGroups).toEqual([]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", tagGroupIds: [] },
+			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [] },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 	});
@@ -46,7 +46,7 @@ describe("loadSettings", () => {
 		expect(settings.afterSend).toBe("stay");
 		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0] }]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", tagGroupIds: ["group-1"] },
+			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"] },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 		expect(settings).not.toHaveProperty("heading");
@@ -68,7 +68,7 @@ describe("loadSettings", () => {
 			id: "books",
 			title: "Книги",
 			target: { type: "files", files: [{ id: "b", alias: "Book", path: "B.md", lastUsedAt: 7 }] },
-			overrides: NO_OVERRIDES, afterSend: "default",
+			overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default",
 			tagGroupIds: [],
 		});
 		saved.lastDestinationId = "b";
@@ -89,23 +89,25 @@ describe("loadSettings", () => {
 			id: "book",
 			title: "Мастер",
 			target: { type: "files", files: [{ id: "book", alias: "Мастер", path: "Books/M.md", lastUsedAt: 0 }] },
-			overrides: NO_OVERRIDES, afterSend: "default",
+			overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default",
 			tagGroupIds: ["group-1"],
 		});
 		expect(settings.lastDestinationId).toBe("book");
 		expect(settings).not.toHaveProperty("lastModeId");
 	});
 
-	it("lets modes saved before the after-sending choice follow the general one", () => {
+	it("lets modes saved before their own choices follow the general ones", () => {
 		const saved = JSON.parse(JSON.stringify(loadSettings(LEGACY)));
 		delete saved.modes[0].afterSend;
-		expect(loadSettings(saved).modes[0].afterSend).toBe("default");
+		delete saved.modes[0].audioLink;
+		expect(loadSettings(saved).modes[0]).toMatchObject({ afterSend: "default", audioLink: "default" });
 	});
 
 	it("keeps a mode's own after-sending choice", () => {
 		const saved = loadSettings(LEGACY);
 		saved.modes[0].afterSend = "open";
-		expect(loadSettings(JSON.parse(JSON.stringify(saved))).modes[0].afterSend).toBe("open");
+		saved.modes[0].audioLink = "link";
+		expect(loadSettings(JSON.parse(JSON.stringify(saved))).modes[0]).toMatchObject({ afterSend: "open", audioLink: "link" });
 	});
 
 	it("opens the keyboard on mobile unless turned off", () => {

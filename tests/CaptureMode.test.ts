@@ -10,6 +10,7 @@ import {
 	NO_OVERRIDES,
 	pickDestination,
 	resolveAfterSend,
+	resolveEmbedAudio,
 	resolveFormat,
 	retainTags,
 } from "../src/domain/CaptureMode";
@@ -24,7 +25,7 @@ const DEFAULTS: EntryFormat = {
 };
 
 function mode(overrides: Partial<CaptureMode> = {}): CaptureMode {
-	return { id: "m", title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", tagGroupIds: [], ...overrides };
+	return { id: "m", title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], ...overrides };
 }
 
 describe("resolveFormat", () => {
@@ -180,5 +181,17 @@ describe("resolveAfterSend", () => {
 
 	it("prefers the mode's own choice", () => {
 		expect(resolveAfterSend("close", mode({ afterSend: "open" }))).toBe("open");
+	});
+});
+
+describe("resolveEmbedAudio", () => {
+	it("follows the general choice by default", () => {
+		expect(resolveEmbedAudio(true, mode())).toBe(true);
+		expect(resolveEmbedAudio(false, mode())).toBe(false);
+	});
+
+	it("prefers the mode's own choice", () => {
+		expect(resolveEmbedAudio(false, mode({ audioLink: "embed" }))).toBe(true);
+		expect(resolveEmbedAudio(true, mode({ audioLink: "link" }))).toBe(false);
 	});
 });

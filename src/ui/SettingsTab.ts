@@ -2,6 +2,7 @@ import { App, DropdownComponent, ExtraButtonComponent, getIcon, Plugin, PluginSe
 import {
 	AfterSend,
 	AfterSendChoice,
+	AudioLinkChoice,
 	CaptureMode,
 	EntryFormat,
 	HeadingLevelChoice,
@@ -10,6 +11,7 @@ import {
 	modeTagGroups,
 	NO_OVERRIDES,
 	noteName,
+	resolveEmbedAudio,
 	resolveFormat,
 } from "../domain/CaptureMode";
 import { systemClock } from "../domain/Clock";
@@ -48,6 +50,11 @@ const AFTER_SEND_OPTIONS: Record<AfterSend, string> = {
 	stay: "Stay for the next entry",
 	open: "Open the note",
 };
+const AUDIO_LINK_OPTIONS: Record<Exclude<AudioLinkChoice, "default">, string> = {
+	embed: "Embed: ![[Recording.m4a]]",
+	link: "Link: [[Recording.m4a]]",
+};
+const AUDIO_LINK_HINT = "An embed shows a player in the note, a link stays plain text.";
 
 export class SettingsTab extends PluginSettingTab {
 	private openCard: string | null = null;
@@ -63,9 +70,9 @@ export class SettingsTab extends PluginSettingTab {
 		this.containerEl.addClass("dqc-settings");
 		this.cards = new Map();
 		this.refreshers = [];
+		this.generalSettings();
 		this.modeSettings();
 		this.tagGroupSettings();
-		this.generalSettings();
 		this.refresh();
 	}
 
@@ -87,6 +94,7 @@ export class SettingsTab extends PluginSettingTab {
 				target: { type: "files", files: [emptyFile()] },
 				overrides: { ...NO_OVERRIDES },
 				afterSend: "default",
+				audioLink: "default",
 				tagGroupIds: [],
 			};
 			this.settings.modes.push(mode);
@@ -118,10 +126,15 @@ export class SettingsTab extends PluginSettingTab {
 			setLevel: (value) => (mode.overrides.headingLevel = parseLevelChoice(value)),
 			hint: `${PLACEHOLDER_HINT} · an empty field uses the default`,
 			preview: () =>
-				previewEntries(resolveFormat(this.settings.defaults, mode.overrides), this.settings.embedAudio, systemClock, this.sampleTag(mode)),
+				previewEntries(
+					resolveFormat(this.settings.defaults, mode.overrides),
+					resolveEmbedAudio(this.settings.embedAudio, mode),
+					systemClock,
+					this.sampleTag(mode),
+				),
 		});
+		this.modeChoices(body, mode);
 		this.modeTagGroups(body, mode);
-		this.modeAfterSend(body, mode);
 		this.modeFooter(body, mode, index);
 
 		this.refreshers.push(() => {
@@ -219,17 +232,18 @@ export class SettingsTab extends PluginSettingTab {
 		});
 	}
 
-	private modeAfterSend(body: HTMLElement, mode: CaptureMode): void {
-		label(body, "After sending");
-		const dropdown = new DropdownComponent(line(body))
-			.addOption("default", `Default (${AFTER_SEND_OPTIONS[this.settings.afterSend]})`)
-			.addOptions(AFTER_SEND_OPTIONS)
-			.setValue(mode.afterSend)
-			.onChange((value) => {
-				mode.afterSend = value as AfterSendChoice;
-				return this.changed();
-			});
-		dropdown.selectEl.addClass("dqc-after-send");
+	private modeChoices(body: HTMLElement, mode: CaptureMode): void {
+		const defaultAudioLink = AUDIO_LINK_OPTIONS[this.settings.embedAudio ? "embed" : "link"];
+		choice(body, "Audio", { default: `Default (${defaultAudioLink})`, ...AUDIO_LINK_OPTIONS }, mode.audioLink, (value) => {
+			mode.audioLink = value as AudioLinkChoice;
+			return this.changed();
+		});
+		hint(body, AUDIO_LINK_HINT);
+		const defaultAfterSend = AFTER_SEND_OPTIONS[this.settings.afterSend];
+		choice(body, "After sending", { default: `Default (${defaultAfterSend})`, ...AFTER_SEND_OPTIONS }, mode.afterSend, (value) => {
+			mode.afterSend = value as AfterSendChoice;
+			return this.changed();
+		});
 	}
 
 	private modeFooter(body: HTMLElement, mode: CaptureMode, index: number): void {
@@ -392,24 +406,6 @@ export class SettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		new Setting(containerEl).setName("General").setHeading();
 		new Setting(containerEl)
-			.setName("Embed audio")
-			.setDesc("On: ![[Recording.m4a]] shows a player. Off: [[Recording.m4a]] is a plain link.")
-			.addToggle((toggle) =>
-				toggle.setValue(this.settings.embedAudio).onChange((value) => {
-					this.settings.embedAudio = value;
-					return this.changed();
-				}),
-			);
-		new Setting(containerEl).setName("After sending").addDropdown((dropdown) =>
-			dropdown
-				.addOptions(AFTER_SEND_OPTIONS)
-				.setValue(this.settings.afterSend)
-				.onChange(async (value) => {
-					this.settings.afterSend = value as AfterSend;
-					await this.saveAndRedraw();
-				}),
-		);
-		new Setting(containerEl)
 			.setName("Open keyboard on iPhone and iPad")
 			.setDesc("The keyboard shows as soon as the capture screen opens. Turn off to start with voice more often.")
 			.addToggle((toggle) =>
@@ -424,7 +420,7 @@ export class SettingsTab extends PluginSettingTab {
 		const defaults: EntryFormat = this.settings.defaults;
 		const card = this.card(DEFAULTS_KEY);
 		card.setTitle("Default format");
-		card.summaryEl.setText("Every mode uses it where its own field is empty.");
+		card.summaryEl.setText("Every mode uses it unless the mode sets its own.");
 		const refreshFormat = this.formatFields(card.bodyEl, defaults, {
 			placeholder: (key) => DEFAULT_PLACEHOLDERS[key],
 			levels: LEVEL_OPTIONS,
@@ -434,6 +430,15 @@ export class SettingsTab extends PluginSettingTab {
 			preview: () => previewEntries(resolveFormat(defaults, NO_OVERRIDES), this.settings.embedAudio, systemClock),
 		});
 		this.refreshers.push(refreshFormat);
+		choice(card.bodyEl, "Audio", AUDIO_LINK_OPTIONS, this.settings.embedAudio ? "embed" : "link", async (value) => {
+			this.settings.embedAudio = value === "embed";
+			await this.saveAndRedraw();
+		});
+		hint(card.bodyEl, AUDIO_LINK_HINT);
+		choice(card.bodyEl, "After sending", AFTER_SEND_OPTIONS, this.settings.afterSend, async (value) => {
+			this.settings.afterSend = value as AfterSend;
+			await this.saveAndRedraw();
+		});
 	}
 
 	private card(key: string): SettingsCard {
@@ -511,6 +516,18 @@ function parseLevelChoice(value: string): HeadingLevelChoice {
 
 function label(parent: HTMLElement, text: string): void {
 	parent.createDiv({ cls: "dqc-label", text });
+}
+
+function choice(
+	parent: HTMLElement,
+	name: string,
+	options: Record<string, string>,
+	value: string,
+	onChange: (value: string) => Promise<void>,
+): void {
+	label(parent, name);
+	const dropdown = new DropdownComponent(line(parent)).addOptions(options).setValue(value).onChange(onChange);
+	dropdown.selectEl.addClass("dqc-choice");
 }
 
 function hint(parent: HTMLElement, text: string): HTMLElement {
