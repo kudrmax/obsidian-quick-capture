@@ -1,7 +1,5 @@
-import { CaptureMode, EntryFormat, NO_OVERRIDES } from "./domain/CaptureMode";
+import { AfterSend, CaptureMode, EntryFormat, NO_OVERRIDES } from "./domain/CaptureMode";
 import { parseHeading } from "./domain/SectionInserter";
-
-export type AfterSend = "close" | "stay";
 
 export interface QuickTag {
 	tag: string;
@@ -56,10 +54,11 @@ export function loadSettings(saved: unknown): CaptureSettings {
 	return structuredClone(settings);
 }
 
-type SingleFileMode = Omit<CaptureMode, "target"> & { target: { type: "file"; path: string } };
+type SavedMode = Omit<CaptureMode, "afterSend"> & Partial<Pick<CaptureMode, "afterSend">>;
+type SingleFileMode = Omit<SavedMode, "target"> & { target: { type: "file"; path: string } };
 
 interface SavedSettings extends Omit<CaptureSettings, "modes"> {
-	modes: (CaptureMode | SingleFileMode)[];
+	modes: (SavedMode | SingleFileMode)[];
 	lastModeId?: string;
 }
 
@@ -68,13 +67,13 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 	const { lastModeId, modes, ...rest } = { ...DEFAULT_SETTINGS, ...saved } as SavedSettings;
 	return {
 		...rest,
-		modes: modes.map(toFilesMode),
+		modes: modes.map((mode) => ({ afterSend: "default", ...toFilesMode(mode) })),
 		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
 	};
 }
 
-function toFilesMode(mode: CaptureMode | SingleFileMode): CaptureMode {
-	if (mode.target.type !== "file") return mode as CaptureMode;
+function toFilesMode(mode: SavedMode | SingleFileMode): SavedMode {
+	if (mode.target.type !== "file") return mode as SavedMode;
 	const file = { id: mode.id, alias: mode.title, path: mode.target.path, lastUsedAt: 0 };
 	return { ...mode, target: { type: "files", files: [file] } };
 }
@@ -108,5 +107,5 @@ function pickFormat(legacy: Partial<LegacySettings>): Partial<EntryFormat> {
 }
 
 function dailyMode(tagGroupIds: string[]): CaptureMode {
-	return { id: DAILY_MODE_ID, title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, tagGroupIds };
+	return { id: DAILY_MODE_ID, title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", tagGroupIds };
 }

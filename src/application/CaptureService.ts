@@ -1,13 +1,18 @@
 import { Destination, destinationProblem, resolveFormat } from "../domain/CaptureMode";
 import { Clock } from "../domain/Clock";
 import { EntryFormatter, EntryTemplate } from "../domain/EntryFormatter";
-import { HeadingTarget, insertIntoSection } from "../domain/SectionInserter";
+import { HeadingTarget, insertEntry } from "../domain/SectionInserter";
 import { CaptureSettings } from "../settings";
 import { AttachmentStore, AudioRecording, NoteTargets, NoteWriter } from "./ports";
 
 export class CaptureError extends Error {}
 
 export class TargetError extends Error {}
+
+export interface CapturedEntry {
+	path: string;
+	line: number;
+}
 
 const MIN_RECORDING_MS = 500;
 
@@ -26,15 +31,15 @@ export class CaptureService {
 		this.formatter = new EntryFormatter(deps.clock);
 	}
 
-	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<void> {
+	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<CapturedEntry> {
 		const content = text.trimEnd();
 		if (content.trim() === "") throw new CaptureError("Nothing to add");
 		const notePath = await this.resolveTarget(destination);
 		const format = resolveFormat(this.deps.settings().defaults, destination.mode.overrides);
-		await this.append(notePath, format.heading, format.text, content, tags);
+		return this.append(notePath, format.heading, format.text, content, tags);
 	}
 
-	async captureAudio(destination: Destination, recording: AudioRecording, tags: readonly string[] = []): Promise<void> {
+	async captureAudio(destination: Destination, recording: AudioRecording, tags: readonly string[] = []): Promise<CapturedEntry> {
 		if (recording.data.byteLength === 0 || recording.durationMs < MIN_RECORDING_MS) {
 			throw new CaptureError("Recording is empty");
 		}
@@ -44,7 +49,7 @@ export class CaptureService {
 		const saved = await this.deps.attachments.save(this.recordingFileName(recording.extension), recording.data, notePath);
 		const content = `${settings.embedAudio ? "!" : ""}${saved.link}`;
 		try {
-			await this.append(notePath, format.heading, format.audio, content, tags);
+			return await this.append(notePath, format.heading, format.audio, content, tags);
 		} catch (error) {
 			await this.deps.attachments.discard(saved.path);
 			throw error;
@@ -63,9 +68,15 @@ export class CaptureService {
 		template: EntryTemplate,
 		content: string,
 		tags: readonly string[],
-	): Promise<void> {
+	): Promise<CapturedEntry> {
 		const entry = this.formatter.format(template, content, tags);
-		await this.deps.notes.update(notePath, (note) => insertIntoSection(note, heading, entry));
+		let line = 0;
+		await this.deps.notes.update(notePath, (note) => {
+			const insertion = insertEntry(note, heading, entry);
+			line = insertion.line;
+			return insertion.content;
+		});
+		return { path: notePath, line };
 	}
 
 	private recordingFileName(extension: string): string {

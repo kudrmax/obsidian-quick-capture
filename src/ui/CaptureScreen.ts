@@ -1,9 +1,16 @@
 import { Notice, setIcon } from "obsidian";
-import { CaptureError, CaptureService, TargetError } from "../application/CaptureService";
+import { CapturedEntry, CaptureError, CaptureService, TargetError } from "../application/CaptureService";
 import { AudioRecording } from "../application/ports";
 import { AudioPlayer, playbackProgress } from "../infrastructure/HtmlAudioPlayer";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
-import { Destination, listDestinations, modeTagGroups, pickDestination, retainTags } from "../domain/CaptureMode";
+import {
+	Destination,
+	listDestinations,
+	modeTagGroups,
+	pickDestination,
+	resolveAfterSend,
+	retainTags,
+} from "../domain/CaptureMode";
 import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
 import { ModePicker } from "./ModePicker";
@@ -19,6 +26,7 @@ export interface CaptureScreenOptions {
 	initial: Destination;
 	onDestinationChange: (id: string) => void;
 	onCaptured: (id: string) => void;
+	openNote: (entry: CapturedEntry) => void;
 	autoFocus: boolean;
 	decorateTextInput: (textarea: HTMLTextAreaElement, destination: () => Destination) => void;
 	onClose: () => void;
@@ -65,7 +73,7 @@ export class CaptureScreen {
 	private readonly modePicker: ModePicker;
 	private readonly today = todayTitle();
 	private current: Destination;
-	private readonly footerObserver: ResizeObserver;
+	private readonly layoutObserver: ResizeObserver;
 
 	private recorder: AudioRecorder | null = null;
 	private pendingRecording: Promise<AudioRecording> | null = null;
@@ -119,10 +127,9 @@ export class CaptureScreen {
 		this.centerSlot = controls.createDiv({ cls: "dqc-slot dqc-slot-center" });
 		const end = controls.createDiv({ cls: "dqc-controls-side dqc-controls-end" });
 		this.closeSlot = end.createDiv({ cls: "dqc-slot dqc-slot-side" });
-		this.footerObserver = new ResizeObserver(() =>
-			this.root.style.setProperty("--dqc-footer-height", `${footer.offsetHeight}px`),
-		);
-		this.footerObserver.observe(footer);
+		this.layoutObserver = new ResizeObserver(() => this.onLayoutChange(footer));
+		this.layoutObserver.observe(footer);
+		this.layoutObserver.observe(body);
 
 		this.tagPicker = new TagPicker(this.root, () => this.modeTagGroups(), this.selectedTags, () => this.renderControls());
 		this.modePicker = new ModePicker(
@@ -141,11 +148,6 @@ export class CaptureScreen {
 		if (this.options.autoFocus && this.state === "input") this.textarea.focus();
 	}
 
-	setKeyboardVisible(visible: boolean): void {
-		this.root.toggleClass("is-keyboard-visible", visible);
-		this.modePicker.reposition();
-	}
-
 	submit(): void {
 		const canSendText = this.state === "input" && this.textarea.value.trim() !== "";
 		if (canSendText || this.state === "stopped") void this.send();
@@ -161,7 +163,7 @@ export class CaptureScreen {
 
 	destroy(): void {
 		this.destroyed = true;
-		this.footerObserver.disconnect();
+		this.layoutObserver.disconnect();
 		this.modePicker.destroy();
 		this.releaseRecorder();
 	}
@@ -293,9 +295,11 @@ export class CaptureScreen {
 		this.tagPicker.close();
 		this.modePicker.close();
 		this.setState("sending");
+		let captured: CapturedEntry;
 		try {
-			if (this.sendingAudio) await this.options.service.captureAudio(destination, await this.requirePendingRecording(), tags);
-			else await this.options.service.captureText(destination, this.textarea.value, tags);
+			captured = this.sendingAudio
+				? await this.options.service.captureAudio(destination, await this.requirePendingRecording(), tags)
+				: await this.options.service.captureText(destination, this.textarea.value, tags);
 		} catch (error) {
 			if (error instanceof TargetError) {
 				new Notice(error.message);
@@ -313,7 +317,7 @@ export class CaptureScreen {
 		}
 		this.options.onCaptured(destination.id);
 		new Notice(`Added to ${destination.title}`);
-		this.resetAfterSend();
+		this.resetAfterSend(destination, captured);
 	}
 
 	private requirePendingRecording(): Promise<AudioRecording> {
@@ -321,7 +325,7 @@ export class CaptureScreen {
 		return this.pendingRecording;
 	}
 
-	private resetAfterSend(): void {
+	private resetAfterSend(destination: Destination, captured: CapturedEntry): void {
 		this.player.release();
 		this.pendingRecording = null;
 		this.selectedTags.clear();
@@ -329,12 +333,14 @@ export class CaptureScreen {
 		this.stoppedElapsedMs = 0;
 		this.waveform.clear();
 		this.state = "input";
-		if (this.options.settings().afterSend === "close") {
-			this.options.onClose();
+		const afterSend = resolveAfterSend(this.options.settings().afterSend, destination.mode);
+		if (afterSend === "stay") {
+			this.render();
+			this.focus();
 			return;
 		}
-		this.render();
-		this.focus();
+		this.options.onClose();
+		if (afterSend === "open") this.options.openNote(captured);
 	}
 
 	private async togglePlayback(): Promise<void> {
@@ -417,6 +423,12 @@ export class CaptureScreen {
 		}
 	}
 
+	private onLayoutChange(footer: HTMLElement): void {
+		this.root.style.setProperty("--dqc-footer-height", `${footer.offsetHeight}px`);
+		if (!this.isAudioMode()) this.fitTextHeight();
+		this.modePicker.reposition();
+	}
+
 	private renderText(): void {
 		this.highlightEl.empty();
 		for (const segment of highlightSegments(this.textarea.value)) {
@@ -424,6 +436,10 @@ export class CaptureScreen {
 			else this.highlightEl.createSpan({ cls: `dqc-hl-${segment.kind}`, text: segment.text });
 		}
 		this.highlightEl.appendText("\u200b");
+		this.fitTextHeight();
+	}
+
+	private fitTextHeight(): void {
 		this.textarea.style.height = "auto";
 		this.textarea.style.height = `${Math.min(this.textarea.scrollHeight, this.availableTextHeight())}px`;
 		this.highlightEl.scrollTop = this.textarea.scrollTop;
