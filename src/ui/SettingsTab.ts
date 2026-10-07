@@ -15,6 +15,7 @@ import {
 	resolveFormat,
 } from "../domain/CaptureMode";
 import { systemClock } from "../domain/Clock";
+import { isDayEnd } from "../domain/DiaryDayClock";
 import { moveItem } from "../domain/ListOrder";
 import { EntryPreview, modeSummary, previewEntries } from "../domain/SettingsPreview";
 import { CaptureSettings, newId, QuickTag, TagGroup } from "../settings";
@@ -414,6 +415,17 @@ export class SettingsTab extends PluginSettingTab {
 					return this.changed();
 				}),
 			);
+		new Setting(containerEl)
+			.setName("Day ends at")
+			.setDesc("Entries made after midnight but before this time go to the previous day's note.")
+			.addText((text) => {
+				text.inputEl.type = "time";
+				text.setValue(this.settings.dayEndsAt).onChange((value) => {
+					if (!isDayEnd(value)) return;
+					this.settings.dayEndsAt = value;
+					return this.changed();
+				});
+			});
 	}
 
 	private defaultsCard(): void {

@@ -117,6 +117,15 @@ describe("loadSettings", () => {
 		expect(loadSettings({ ...saved, openKeyboardOnMobile: false }).openKeyboardOnMobile).toBe(false);
 	});
 
+	it("ends the day at 05:00 unless a valid time is saved", () => {
+		expect(loadSettings(null).dayEndsAt).toBe("05:00");
+		expect(loadSettings(LEGACY).dayEndsAt).toBe("05:00");
+		const { dayEndsAt: _, ...saved } = loadSettings(null);
+		expect(loadSettings(saved).dayEndsAt).toBe("05:00");
+		expect(loadSettings({ ...saved, dayEndsAt: "03:30" }).dayEndsAt).toBe("03:30");
+		expect(loadSettings({ ...saved, dayEndsAt: "nonsense" }).dayEndsAt).toBe("05:00");
+	});
+
 		it("never shares lists between loads", () => {
 		const first = loadSettings(undefined);
 		first.tagGroups.push({ id: "x", name: "Books", tags: [] });
