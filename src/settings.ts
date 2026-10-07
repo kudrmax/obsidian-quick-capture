@@ -1,4 +1,5 @@
 import { AfterSend, CaptureMode, EntryFormat, NO_OVERRIDES } from "./domain/CaptureMode";
+import { DEFAULT_DAY_END, isDayEnd } from "./domain/DiaryDayClock";
 import { parseHeading } from "./domain/SectionInserter";
 
 export interface QuickTag {
@@ -17,6 +18,7 @@ export interface CaptureSettings {
 	embedAudio: boolean;
 	afterSend: AfterSend;
 	openKeyboardOnMobile: boolean;
+	dayEndsAt: string;
 	tagGroups: TagGroup[];
 	modes: CaptureMode[];
 	lastDestinationId: string;
@@ -37,6 +39,7 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
 	embedAudio: true,
 	afterSend: "close",
 	openKeyboardOnMobile: true,
+	dayEndsAt: DEFAULT_DAY_END,
 	tagGroups: [],
 	modes: [dailyMode([])],
 	lastDestinationId: DAILY_MODE_ID,
@@ -68,6 +71,7 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 	const { lastModeId, modes, ...rest } = { ...DEFAULT_SETTINGS, ...saved } as SavedSettings;
 	return {
 		...rest,
+		dayEndsAt: isDayEnd(rest.dayEndsAt) ? rest.dayEndsAt : DEFAULT_DAY_END,
 		modes: modes.map((mode) => ({ afterSend: "default", audioLink: "default", ...toFilesMode(mode) })),
 		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
 	};
@@ -96,6 +100,7 @@ function migrateLegacy(legacy: Partial<LegacySettings>): CaptureSettings {
 		embedAudio: legacy.embedAudio ?? DEFAULT_SETTINGS.embedAudio,
 		afterSend: legacy.afterSend ?? DEFAULT_SETTINGS.afterSend,
 		openKeyboardOnMobile: DEFAULT_SETTINGS.openKeyboardOnMobile,
+		dayEndsAt: DEFAULT_DAY_END,
 		tagGroups,
 		modes: [dailyMode(tagGroups.map((group) => group.id))],
 		lastDestinationId: DAILY_MODE_ID,

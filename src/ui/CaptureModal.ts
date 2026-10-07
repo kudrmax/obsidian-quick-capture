@@ -13,6 +13,7 @@ export interface CaptureModalDependencies {
 	createPlayer: () => AudioPlayer;
 	settings: () => CaptureSettings;
 	destination: Destination;
+	today: string;
 	onDestinationChange: (id: string) => void;
 	onCaptured: (id: string) => void;
 	openNote: (entry: CapturedEntry) => void;
@@ -36,6 +37,7 @@ export class CaptureModal extends Modal {
 			createPlayer: this.deps.createPlayer,
 			settings: this.deps.settings,
 			initial: this.deps.destination,
+			today: this.deps.today,
 			onDestinationChange: this.deps.onDestinationChange,
 			onCaptured: this.deps.onCaptured,
 			openNote: this.deps.openNote,

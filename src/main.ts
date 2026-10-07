@@ -1,6 +1,7 @@
 import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
 import { systemClock } from "./domain/Clock";
+import { DiaryDayClock } from "./domain/DiaryDayClock";
 import { listDestinations, markUsed, pickDestination } from "./domain/CaptureMode";
 import { HtmlAudioPlayer } from "./infrastructure/HtmlAudioPlayer";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
@@ -23,7 +24,8 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 	override async onload(): Promise<void> {
 		this.settings = loadSettings(await this.loadData());
 
-		const dailyNotes = new ObsidianDailyNotes(this.app, systemClock, (message) => new Notice(message));
+		const diaryClock = new DiaryDayClock(systemClock, () => this.settings.dayEndsAt);
+		const dailyNotes = new ObsidianDailyNotes(this.app, diaryClock, (message) => new Notice(message));
 		const targets = new ObsidianNoteTargets(this.app, dailyNotes);
 		const service = new CaptureService({
 			targets,
@@ -33,7 +35,8 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 			settings: () => this.settings,
 		});
 		this.openCapture = (destinationId, fallBackToFirst) => {
-			const destinations = listDestinations(this.settings.modes, todayTitle());
+			const today = todayTitle(diaryClock.now());
+			const destinations = listDestinations(this.settings.modes, today);
 			const destination = fallBackToFirst
 				? pickDestination(destinations, destinationId)
 				: destinations.find((candidate) => candidate.id === destinationId);
@@ -47,6 +50,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 				createPlayer: () => new HtmlAudioPlayer(),
 				settings: () => this.settings,
 				destination,
+				today,
 				onDestinationChange: (id) => {
 					this.settings.lastDestinationId = id;
 					void this.saveSettings();
