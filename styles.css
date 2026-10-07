@@ -902,3 +902,30 @@ body.is-mobile .dqc-controls {
 	margin-top: 8px;
 	padding-bottom: 4px;
 }
+
+.dqc-time-input {
+	height: var(--input-height);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--input-border-width) solid var(--background-modifier-border);
+	border-radius: var(--input-radius);
+	background: var(--background-modifier-form-field);
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+}
+
+.dqc-time-input:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.dqc-time-input:focus,
+.dqc-time-input:focus-visible {
+	border-color: var(--background-modifier-border-focus);
+	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+	outline: none;
+}
+
+.dqc-time-input::-webkit-calendar-picker-indicator {
+	display: none;
+}

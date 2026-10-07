@@ -420,6 +420,7 @@ export class SettingsTab extends PluginSettingTab {
 			.setDesc("Entries made after midnight but before this time go to the previous day's note.")
 			.addText((text) => {
 				text.inputEl.type = "time";
+				text.inputEl.addClass("dqc-time-input");
 				text.setValue(this.settings.dayEndsAt).onChange((value) => {
 					if (!isDayEnd(value)) return;
 					this.settings.dayEndsAt = value;
