@@ -185,6 +185,12 @@ describe("movePaths", () => {
 		expect(paths(modes)).toEqual([["Archive/Book.md", undefined]]);
 	});
 
+	it("follows a file whose configured path differs only in unicode form", () => {
+		const modes = [filesMode("books", [file("a", "Books/Мой.md".normalize("NFD"))])];
+		expect(movePaths(modes, "Books/Мой.md", "Books/Твой.md")).toBe(true);
+		expect(paths(modes)).toEqual([["Books/Твой.md", undefined]]);
+	});
+
 	it("follows files inside a renamed folder but not in a folder with a similar name", () => {
 		const modes = [filesMode("books", [file("a", "Books/2026/A.md"), file("b", "Books 2/B.md"), file("c", "Books.md")])];
 		expect(movePaths(modes, "Books", "Library")).toBe(true);

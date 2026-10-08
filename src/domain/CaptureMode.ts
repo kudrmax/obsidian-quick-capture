@@ -167,7 +167,7 @@ function wasWritten(file: ModeFile): boolean {
 }
 
 function cleanPath(path: string): string {
-	return path.trim().replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
+	return path.trim().replace(/[\u00A0\u202F]/g, " ").replace(/\/+/g, "/").replace(/^\/|\/$/g, "").normalize("NFC");
 }
 
 function byLastUse(files: ModeFile[]): ModeFile[] {
