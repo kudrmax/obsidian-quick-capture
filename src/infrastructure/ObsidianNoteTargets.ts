@@ -14,10 +14,11 @@ export class ObsidianNoteTargets implements NoteTargets {
 		private readonly daily: DailyNotes,
 	) {}
 
-	async resolve(target: NoteTarget): Promise<string> {
+	async resolve(target: NoteTarget): Promise<string | null> {
 		if (target.type === "daily") return this.daily.getOrCreateToday();
 		const path = this.previewPath(target);
 		if (this.app.vault.getFileByPath(path)) return path;
+		if (target.mustExist) return null;
 		await ensureParentFolder(this.app.vault, path);
 		await this.app.vault.create(path, "");
 		return path;

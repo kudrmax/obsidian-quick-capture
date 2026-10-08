@@ -53,6 +53,13 @@ describe("ObsidianNoteTargets", () => {
 		expect(vault.files.get("Books/2026/Book.md")).toBe("");
 	});
 
+	it("does not recreate a missing file that must exist", async () => {
+		const { vault, targets } = setup();
+		expect(await targets.resolve({ type: "file", path: "Books/Book.md", mustExist: true })).toBeNull();
+		expect(vault.files.size).toBe(0);
+		expect(vault.createdFolders).toEqual([]);
+	});
+
 	it("normalizes the configured path", async () => {
 		const { vault, targets } = setup();
 		expect(await targets.resolve({ type: "file", path: " /Ideas//Idea.md " })).toBe("Ideas/Idea.md");
