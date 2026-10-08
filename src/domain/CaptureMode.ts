@@ -27,13 +27,14 @@ export type AfterSendChoice = "default" | AfterSend;
 
 export type AudioLinkChoice = "default" | "embed" | "link";
 
-export type NoteTarget = { type: "daily" } | { type: "file"; path: string };
+export type NoteTarget = { type: "daily" } | { type: "file"; path: string; wasWritten?: boolean };
 
 export interface ModeFile {
 	id: string;
 	alias: string;
 	path: string;
 	lastUsedAt: number;
+	writtenPath?: string;
 }
 
 export type ModeTarget = { type: "daily" } | { type: "files"; files: ModeFile[] };
@@ -108,7 +109,7 @@ export function listDestinations(modes: CaptureMode[], today: string): Destinati
 			id: file.id,
 			mode,
 			title: file.alias.trim() || noteName(file.path),
-			target: { type: "file", path: file.path.trim() },
+			target: { type: "file", path: file.path.trim(), wasWritten: wasWritten(file) },
 		}));
 	});
 }
@@ -123,6 +124,7 @@ export function markUsed(modes: CaptureMode[], destinationId: string, at: number
 		const file = mode.target.files.find((candidate) => candidate.id === destinationId);
 		if (file) {
 			file.lastUsedAt = at;
+			file.writtenPath = cleanPath(file.path);
 			return true;
 		}
 	}
@@ -132,6 +134,40 @@ export function markUsed(modes: CaptureMode[], destinationId: string, at: number
 export function destinationProblem(destination: Destination): string | null {
 	if (destination.target.type === "daily" || isNotePath(destination.target.path)) return null;
 	return `Choose a file for "${destination.title}"`;
+}
+
+export function movePaths(modes: CaptureMode[], oldPath: string, newPath: string): boolean {
+	const from = cleanPath(oldPath);
+	const to = cleanPath(newPath);
+	if (from === "" || from === to) return false;
+	let moved = false;
+	for (const mode of modes) {
+		if (mode.target.type !== "files") continue;
+		for (const file of mode.target.files) {
+			const path = movedPath(file.path, from, to);
+			if (path !== null) {
+				file.path = path;
+				moved = true;
+			}
+			const written = file.writtenPath === undefined ? null : movedPath(file.writtenPath, from, to);
+			if (written !== null) file.writtenPath = written;
+		}
+	}
+	return moved;
+}
+
+function movedPath(path: string, from: string, to: string): string | null {
+	const current = cleanPath(path);
+	if (current === from) return to;
+	return current.startsWith(`${from}/`) ? to + current.slice(from.length) : null;
+}
+
+function wasWritten(file: ModeFile): boolean {
+	return file.writtenPath !== undefined && cleanPath(file.writtenPath) === cleanPath(file.path);
+}
+
+function cleanPath(path: string): string {
+	return path.trim().replace(/[\u00A0\u202F]/g, " ").replace(/\/+/g, "/").replace(/^\/|\/$/g, "").normalize("NFC");
 }
 
 function byLastUse(files: ModeFile[]): ModeFile[] {

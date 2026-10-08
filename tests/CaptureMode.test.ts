@@ -5,6 +5,7 @@ import {
 	EntryFormat,
 	listDestinations,
 	markUsed,
+	movePaths,
 	ModeFile,
 	modeTagGroups,
 	NO_OVERRIDES,
@@ -107,7 +108,7 @@ describe("listDestinations", () => {
 			["b", "Сапиенс"],
 		]);
 		expect(list[1].mode).toBe(books);
-		expect(list[1].target).toEqual({ type: "file", path: "Reading/Мастер и Маргарита.md" });
+		expect(list[1].target).toEqual({ type: "file", path: "Reading/Мастер и Маргарита.md", wasWritten: false });
 	});
 
 	it("puts the most recently used files of a mode first and never used ones after them in settings order", () => {
@@ -150,6 +151,56 @@ describe("markUsed", () => {
 
 	it("changes nothing for a daily destination", () => {
 		expect(markUsed([mode({ id: "daily" })], "daily", 42)).toBe(false);
+	});
+
+	it("makes the written file required from then on", () => {
+		const books = filesMode("books", [file("a", " /Books//A.md ")]);
+		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: false });
+		markUsed([books], "a", 42);
+		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: true });
+	});
+
+	it("lets a file be created again once its path is edited", () => {
+		const books = filesMode("books", [{ ...file("a", "New.md"), writtenPath: "Old.md" }]);
+		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: false });
+	});
+});
+
+describe("movePaths", () => {
+	const paths = (modes: CaptureMode[]) =>
+		modes.flatMap((m) => (m.target.type === "files" ? m.target.files.map((f) => [f.path, f.writtenPath]) : []));
+
+	it("follows a renamed file", () => {
+		const modes = [mode(), filesMode("books", [{ ...file("a", "Books/Book.md"), writtenPath: "Books/Book.md" }, file("b", "Books/Other.md")])];
+		expect(movePaths(modes, "Books/Book.md", "Books/Book Notes.md")).toBe(true);
+		expect(paths(modes)).toEqual([
+			["Books/Book Notes.md", "Books/Book Notes.md"],
+			["Books/Other.md", undefined],
+		]);
+	});
+
+	it("follows a file configured with untidy slashes", () => {
+		const modes = [filesMode("books", [file("a", " /Books//Book.md ")])];
+		expect(movePaths(modes, "Books/Book.md", "Archive/Book.md")).toBe(true);
+		expect(paths(modes)).toEqual([["Archive/Book.md", undefined]]);
+	});
+
+	it("follows a file whose configured path differs only in unicode form", () => {
+		const modes = [filesMode("books", [file("a", "Books/Мой.md".normalize("NFD"))])];
+		expect(movePaths(modes, "Books/Мой.md", "Books/Твой.md")).toBe(true);
+		expect(paths(modes)).toEqual([["Books/Твой.md", undefined]]);
+	});
+
+	it("follows files inside a renamed folder but not in a folder with a similar name", () => {
+		const modes = [filesMode("books", [file("a", "Books/2026/A.md"), file("b", "Books 2/B.md"), file("c", "Books.md")])];
+		expect(movePaths(modes, "Books", "Library")).toBe(true);
+		expect(paths(modes).map(([path]) => path)).toEqual(["Library/2026/A.md", "Books 2/B.md", "Books.md"]);
+	});
+
+	it("reports nothing when no configured file is affected", () => {
+		const modes = [filesMode("books", [file("a", "Books/Book.md")])];
+		expect(movePaths(modes, "Notes/Idea.md", "Notes/Idea 2.md")).toBe(false);
+		expect(paths(modes)).toEqual([["Books/Book.md", undefined]]);
 	});
 });
 

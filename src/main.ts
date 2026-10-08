@@ -2,7 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
 import { systemClock } from "./domain/Clock";
 import { DiaryDayClock } from "./domain/DiaryDayClock";
-import { listDestinations, markUsed, pickDestination } from "./domain/CaptureMode";
+import { listDestinations, markUsed, movePaths, pickDestination } from "./domain/CaptureMode";
 import { HtmlAudioPlayer } from "./infrastructure/HtmlAudioPlayer";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
 import { ObsidianAttachments } from "./infrastructure/ObsidianAttachments";
@@ -26,7 +26,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 
 		const diaryClock = new DiaryDayClock(systemClock, () => this.settings.dayEndsAt);
 		const dailyNotes = new ObsidianDailyNotes(this.app, diaryClock, (message) => new Notice(message));
-		const targets = new ObsidianNoteTargets(this.app, dailyNotes);
+		const targets = new ObsidianNoteTargets(this.app, dailyNotes, (message) => new Notice(message, 0));
 		const service = new CaptureService({
 			targets,
 			notes: new ObsidianNoteWriter(this.app),
@@ -68,6 +68,11 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 		this.addCommand({ id: "open", name: "Open quick capture", callback: openLast });
 		this.syncDestinationCommands();
 		this.addSettingTab(new SettingsTab(this.app, this));
+		this.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => {
+				if (movePaths(this.settings.modes, oldPath, file.path)) void this.saveSettings();
+			}),
+		);
 	}
 
 	async saveSettings(): Promise<void> {

@@ -196,6 +196,7 @@ export class SettingsTab extends PluginSettingTab {
 		showAliasPlaceholder();
 		const savePath = (value: string) => {
 			file.path = value;
+			delete file.writtenPath;
 			showAliasPlaceholder();
 			return this.changed();
 		};

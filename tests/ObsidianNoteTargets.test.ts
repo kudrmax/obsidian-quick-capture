@@ -27,8 +27,9 @@ class FakeVault {
 function setup() {
 	const vault = new FakeVault();
 	const daily = { getOrCreateToday: async () => "Daily/today.md", todayPath: () => "Daily/today.md" };
-	const targets = new ObsidianNoteTargets({ vault } as unknown as App, daily);
-	return { vault, targets };
+	const warnings: string[] = [];
+	const targets = new ObsidianNoteTargets({ vault } as unknown as App, daily, (message) => warnings.push(message));
+	return { vault, targets, warnings };
 }
 
 describe("ObsidianNoteTargets", () => {
@@ -51,6 +52,19 @@ describe("ObsidianNoteTargets", () => {
 		expect(await targets.resolve({ type: "file", path: "Books/2026/Book.md" })).toBe("Books/2026/Book.md");
 		expect(vault.createdFolders).toEqual(["Books/2026"]);
 		expect(vault.files.get("Books/2026/Book.md")).toBe("");
+	});
+
+	it("creates a new file quietly", async () => {
+		const { targets, warnings } = setup();
+		await targets.resolve({ type: "file", path: "Books/Book.md", wasWritten: false });
+		expect(warnings).toEqual([]);
+	});
+
+	it("recreates a file that was written to before and warns that it went missing", async () => {
+		const { vault, targets, warnings } = setup();
+		expect(await targets.resolve({ type: "file", path: "Books/Book.md", wasWritten: true })).toBe("Books/Book.md");
+		expect(vault.files.get("Books/Book.md")).toBe("");
+		expect(warnings).toEqual(["Books/Book.md was not found, so a new note was created. If the note was renamed or moved, choose it again in Quick Capture settings"]);
 	});
 
 	it("normalizes the configured path", async () => {
