@@ -26,7 +26,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 
 		const diaryClock = new DiaryDayClock(systemClock, () => this.settings.dayEndsAt);
 		const dailyNotes = new ObsidianDailyNotes(this.app, diaryClock, (message) => new Notice(message));
-		const targets = new ObsidianNoteTargets(this.app, dailyNotes);
+		const targets = new ObsidianNoteTargets(this.app, dailyNotes, (message) => new Notice(message, 0));
 		const service = new CaptureService({
 			targets,
 			notes: new ObsidianNoteWriter(this.app),

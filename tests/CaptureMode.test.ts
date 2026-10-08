@@ -108,7 +108,7 @@ describe("listDestinations", () => {
 			["b", "Сапиенс"],
 		]);
 		expect(list[1].mode).toBe(books);
-		expect(list[1].target).toEqual({ type: "file", path: "Reading/Мастер и Маргарита.md", mustExist: false });
+		expect(list[1].target).toEqual({ type: "file", path: "Reading/Мастер и Маргарита.md", wasWritten: false });
 	});
 
 	it("puts the most recently used files of a mode first and never used ones after them in settings order", () => {
@@ -155,14 +155,14 @@ describe("markUsed", () => {
 
 	it("makes the written file required from then on", () => {
 		const books = filesMode("books", [file("a", " /Books//A.md ")]);
-		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ mustExist: false });
+		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: false });
 		markUsed([books], "a", 42);
-		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ mustExist: true });
+		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: true });
 	});
 
 	it("lets a file be created again once its path is edited", () => {
 		const books = filesMode("books", [{ ...file("a", "New.md"), writtenPath: "Old.md" }]);
-		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ mustExist: false });
+		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: false });
 	});
 });
 

@@ -56,14 +56,10 @@ export class CaptureService {
 		}
 	}
 
-	private async resolveTarget(destination: Destination): Promise<string> {
+	private resolveTarget(destination: Destination): Promise<string> {
 		const problem = destinationProblem(destination);
-		if (problem) throw new TargetError(problem);
-		const path = await this.deps.targets.resolve(destination.target);
-		if (path === null) {
-			throw new TargetError(`"${destination.title}" is no longer in the vault. If it was renamed or moved, choose it again in Quick Capture settings`);
-		}
-		return path;
+		if (problem) return Promise.reject(new TargetError(problem));
+		return this.deps.targets.resolve(destination.target);
 	}
 
 	private async append(

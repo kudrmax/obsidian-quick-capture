@@ -27,7 +27,7 @@ export type AfterSendChoice = "default" | AfterSend;
 
 export type AudioLinkChoice = "default" | "embed" | "link";
 
-export type NoteTarget = { type: "daily" } | { type: "file"; path: string; mustExist?: boolean };
+export type NoteTarget = { type: "daily" } | { type: "file"; path: string; wasWritten?: boolean };
 
 export interface ModeFile {
 	id: string;
@@ -109,7 +109,7 @@ export function listDestinations(modes: CaptureMode[], today: string): Destinati
 			id: file.id,
 			mode,
 			title: file.alias.trim() || noteName(file.path),
-			target: { type: "file", path: file.path.trim(), mustExist: wasWritten(file) },
+			target: { type: "file", path: file.path.trim(), wasWritten: wasWritten(file) },
 		}));
 	});
 }

@@ -10,9 +10,8 @@ class FakeNotes implements NoteTargets, NoteWriter {
 	files = new Map<string, string>();
 	failWrites = false;
 
-	async resolve(target: NoteTarget): Promise<string | null> {
+	async resolve(target: NoteTarget): Promise<string> {
 		const path = target.type === "daily" ? NOTE : target.path;
-		if (target.type === "file" && target.mustExist && !this.files.has(path)) return null;
 		if (!this.files.has(path)) this.files.set(path, "");
 		return path;
 	}
@@ -174,15 +173,6 @@ describe("CaptureService", () => {
 		const noFile: Destination = { ...BOOK, target: { type: "file", path: "" } };
 		await expect(service.captureAudio(noFile, audio)).rejects.toBeInstanceOf(TargetError);
 		await expect(service.captureText(noFile, "milk")).rejects.toThrow('Choose a file for "Book"');
-		expect(attachments.saved).toEqual([]);
-		expect(notes.files.size).toBe(0);
-	});
-
-	it("refuses a file that was written to before and has disappeared instead of creating it again", async () => {
-		const { notes, attachments, service } = setup();
-		const gone: Destination = { ...BOOK, target: { type: "file", path: "Books/Book.md", mustExist: true } };
-		await expect(service.captureAudio(gone, audio)).rejects.toBeInstanceOf(TargetError);
-		await expect(service.captureText(gone, "milk")).rejects.toThrow('"Book" is no longer in the vault');
 		expect(attachments.saved).toEqual([]);
 		expect(notes.files.size).toBe(0);
 	});
