@@ -1,4 +1,5 @@
 import { AudioRecording } from "../application/ports";
+import { partOffsets } from "../domain/RecordingParts";
 
 export interface AudioPlayer {
 	play(recording: AudioRecording, onEnded: () => void): Promise<void>;
@@ -18,47 +19,79 @@ export function playbackProgress(positionMs: number, totalMs: number): number {
 	return Math.min(1, Math.max(0, positionMs / totalMs));
 }
 
+interface Track {
+	audio: HTMLAudioElement;
+	url: string;
+	offsetMs: number;
+}
+
 export class HtmlAudioPlayer implements AudioPlayer {
-	private audio: HTMLAudioElement | null = null;
-	private url: string | null = null;
+	private tracks: Track[] = [];
+	private index = 0;
 	private loaded: AudioRecording | null = null;
+	private onEnded: () => void = () => undefined;
 
 	async play(recording: AudioRecording, onEnded: () => void): Promise<void> {
-		const audio = this.load(recording);
-		audio.onended = () => {
-			audio.currentTime = 0;
-			onEnded();
-		};
-		await audio.play();
+		this.load(recording);
+		this.onEnded = onEnded;
+		await this.current()?.audio.play();
 	}
 
 	pause(): void {
-		this.audio?.pause();
+		this.current()?.audio.pause();
 	}
 
 	isPlaying(): boolean {
-		return this.audio !== null && !this.audio.paused;
+		const track = this.current();
+		return track !== undefined && !track.audio.paused;
 	}
 
 	positionMs(): number {
-		return (this.audio?.currentTime ?? 0) * 1000;
+		const track = this.current();
+		return track ? track.offsetMs + track.audio.currentTime * 1000 : 0;
 	}
 
 	release(): void {
-		this.audio?.pause();
-		if (this.url) URL.revokeObjectURL(this.url);
-		this.audio = null;
-		this.url = null;
+		for (const track of this.tracks) {
+			track.audio.pause();
+			URL.revokeObjectURL(track.url);
+		}
+		this.tracks = [];
+		this.index = 0;
 		this.loaded = null;
 	}
 
-	private load(recording: AudioRecording): HTMLAudioElement {
-		if (this.audio && this.loaded === recording) return this.audio;
+	private current(): Track | undefined {
+		return this.tracks[this.index];
+	}
+
+	private load(recording: AudioRecording): void {
+		if (this.loaded === recording) return;
 		this.release();
-		this.url = URL.createObjectURL(new Blob([recording.data], { type: mimeTypeFor(recording.extension) }));
-		this.audio = new Audio(this.url);
-		this.audio.setAttribute("playsinline", "");
+		const type = mimeTypeFor(recording.extension);
+		const offsets = partOffsets(recording.parts.map((part) => part.durationMs));
+		this.tracks = recording.parts.map((part, index) => {
+			const url = URL.createObjectURL(new Blob([part.data], { type }));
+			const audio = new Audio(url);
+			audio.setAttribute("playsinline", "");
+			audio.onended = () => this.advance(index);
+			return { audio, url, offsetMs: offsets[index] };
+		});
 		this.loaded = recording;
-		return this.audio;
+	}
+
+	private advance(finishedIndex: number): void {
+		if (finishedIndex < this.tracks.length - 1) {
+			this.index = finishedIndex + 1;
+			void this.tracks[this.index].audio.play().catch(() => this.finish());
+			return;
+		}
+		this.finish();
+	}
+
+	private finish(): void {
+		for (const track of this.tracks) track.audio.currentTime = 0;
+		this.index = 0;
+		this.onEnded();
 	}
 }
