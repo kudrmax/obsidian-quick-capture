@@ -18,8 +18,13 @@ export interface AttachmentStore {
 	discard(path: string): Promise<void>;
 }
 
-export interface AudioRecording {
+export interface AudioPart {
 	data: ArrayBuffer;
+	durationMs: number;
+}
+
+export interface AudioRecording {
+	parts: AudioPart[];
 	extension: string;
 	durationMs: number;
 }

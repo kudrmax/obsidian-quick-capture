@@ -26,8 +26,10 @@ class FakeAttachments implements AttachmentStore {
 	saved: string[] = [];
 	savedFor: string[] = [];
 	discarded: string[] = [];
+	failOnSave: number | null = null;
 
 	async save(fileName: string, _data: ArrayBuffer, notePath: string) {
+		if (this.saved.length === this.failOnSave) throw new Error("vault is read-only");
 		const path = `Files/${fileName}`;
 		this.saved.push(path);
 		this.savedFor.push(notePath);
@@ -64,7 +66,8 @@ function setup(format: Partial<EntryFormat> = {}, other: Partial<CaptureSettings
 	return { notes, attachments, service };
 }
 
-const audio = { data: new Uint8Array([1, 2]).buffer, extension: "m4a", durationMs: 4000 };
+const part = (bytes: number[], durationMs = 4000) => ({ data: new Uint8Array(bytes).buffer, durationMs });
+const audio = { parts: [part([1, 2])], extension: "m4a", durationMs: 4000 };
 
 describe("CaptureService", () => {
 	it("appends formatted text to today's note", async () => {
@@ -110,7 +113,7 @@ describe("CaptureService", () => {
 
 	it("rejects an empty recording without touching files", async () => {
 		const { attachments, service } = setup();
-		await expect(service.captureAudio(DAILY, { data: new ArrayBuffer(0), extension: "m4a", durationMs: 4000 })).rejects.toThrow(
+		await expect(service.captureAudio(DAILY, { parts: [part([])], extension: "m4a", durationMs: 4000 })).rejects.toThrow(
 			"Recording is empty",
 		);
 		expect(attachments.saved).toEqual([]);
@@ -121,6 +124,42 @@ describe("CaptureService", () => {
 		notes.failWrites = true;
 		await expect(service.captureAudio(DAILY, audio)).rejects.toThrow("disk full");
 		expect(attachments.discarded).toEqual(["Files/Recording 20260929213705.m4a"]);
+	});
+
+	it("puts every part of a split recording on one line, in order", async () => {
+		const { notes, attachments, service } = setup({}, { embedAudio: true });
+		await service.captureAudio(DAILY, { parts: [part([1]), part([2]), part([3])], extension: "m4a", durationMs: 12000 }, ["idea"]);
+		expect(attachments.saved).toEqual([
+			"Files/Recording 20260929213705 (1).m4a",
+			"Files/Recording 20260929213705 (2).m4a",
+			"Files/Recording 20260929213705 (3).m4a",
+		]);
+		expect(notes.files.get(NOTE)).toBe(
+			"- 21:37 ![[Recording 20260929213705 (1).m4a]] ![[Recording 20260929213705 (2).m4a]] ![[Recording 20260929213705 (3).m4a]] #idea",
+		);
+	});
+
+	it("skips empty parts and keeps the plain name when one part is left", async () => {
+		const { attachments, service } = setup();
+		await service.captureAudio(DAILY, { parts: [part([1]), part([])], extension: "m4a", durationMs: 4000 });
+		expect(attachments.saved).toEqual(["Files/Recording 20260929213705.m4a"]);
+	});
+
+	it("discards every saved part when writing the note fails", async () => {
+		const { notes, attachments, service } = setup();
+		notes.failWrites = true;
+		await expect(service.captureAudio(DAILY, { parts: [part([1]), part([2])], extension: "m4a", durationMs: 8000 })).rejects.toThrow();
+		expect(attachments.discarded).toEqual(["Files/Recording 20260929213705 (1).m4a", "Files/Recording 20260929213705 (2).m4a"]);
+	});
+
+	it("discards the parts saved so far when saving a later part fails", async () => {
+		const { notes, attachments, service } = setup();
+		attachments.failOnSave = 1;
+		await expect(service.captureAudio(DAILY, { parts: [part([1]), part([2])], extension: "m4a", durationMs: 8000 })).rejects.toThrow(
+			"vault is read-only",
+		);
+		expect(attachments.discarded).toEqual(["Files/Recording 20260929213705 (1).m4a"]);
+		expect(notes.files.get(NOTE)).toBe("");
 	});
 
 	it("treats a recording shorter than half a second as empty", async () => {
