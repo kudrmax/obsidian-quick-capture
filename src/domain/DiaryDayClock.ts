@@ -14,6 +14,12 @@ function minutesOf(dayEnd: string): number {
 	return Number(match[1]) * MINUTES_PER_HOUR + Number(match[2]);
 }
 
+export function daysBefore(date: Date, days: number): Date {
+	const earlier = new Date(date);
+	earlier.setDate(date.getDate() - days);
+	return earlier;
+}
+
 export class DiaryDayClock implements Clock {
 	constructor(
 		private readonly clock: Clock,
@@ -23,8 +29,6 @@ export class DiaryDayClock implements Clock {
 	now(): Date {
 		const now = this.clock.now();
 		if (now.getHours() * MINUTES_PER_HOUR + now.getMinutes() >= minutesOf(this.dayEnd())) return now;
-		const diaryDay = new Date(now);
-		diaryDay.setDate(now.getDate() - 1);
-		return diaryDay;
+		return daysBefore(now, 1);
 	}
 }

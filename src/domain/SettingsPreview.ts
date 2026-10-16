@@ -26,8 +26,13 @@ export function modeSummary(mode: CaptureMode, defaults: EntryFormat): string {
 	return `${targetSummary(mode)} · ${heading ? `under “${heading.text}”` : "end of note"}`;
 }
 
+function dailySummary(daysBack: number): string {
+	if (daysBack === 0) return "Daily note";
+	return `Daily note, ${daysBack} ${daysBack === 1 ? "day" : "days"} back`;
+}
+
 function targetSummary(mode: CaptureMode): string {
-	if (mode.target.type === "daily") return "Daily note";
+	if (mode.target.type === "daily") return dailySummary(mode.target.daysBack);
 	const files = mode.target.files.filter((file) => file.path.trim() !== "");
 	if (files.length === 0) return "No file yet";
 	if (files.length === 1) return files[0].alias.trim() || noteName(files[0].path);

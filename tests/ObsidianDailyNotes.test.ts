@@ -54,7 +54,7 @@ describe("ObsidianDailyNotes", () => {
 	it("returns today's existing note without creating anything", async () => {
 		const { vault, dailyNotes } = setup({ folder: "Journal", format: "YYYY-MM-DD" });
 		vault.files.set("Journal/2026-09-29.md", "existing");
-		expect(await dailyNotes.getOrCreateToday()).toBe("Journal/2026-09-29.md");
+		expect(await dailyNotes.getOrCreate(0)).toBe("Journal/2026-09-29.md");
 		expect(vault.files.get("Journal/2026-09-29.md")).toBe("existing");
 		expect(vault.createdFolders).toEqual([]);
 	});
@@ -62,7 +62,7 @@ describe("ObsidianDailyNotes", () => {
 	it("creates every missing parent folder, including folders from the format", async () => {
 		const { vault, dailyNotes } = setup({ folder: "Journal", format: "YYYY/MM/YYYY-MM-DD" });
 		vault.folders.add("Journal");
-		expect(await dailyNotes.getOrCreateToday()).toBe("Journal/2026/09/2026-09-29.md");
+		expect(await dailyNotes.getOrCreate(0)).toBe("Journal/2026/09/2026-09-29.md");
 		expect(vault.createdFolders).toEqual(["Journal/2026", "Journal/2026/09"]);
 		expect(vault.files.get("Journal/2026/09/2026-09-29.md")).toBe("");
 	});
@@ -70,26 +70,41 @@ describe("ObsidianDailyNotes", () => {
 	it("fills the new note from the template", async () => {
 		const { vault, dailyNotes } = setup({ format: "DD.MM.YYYY", template: "Templates/Daily" });
 		vault.files.set("Templates/Daily.md", "# {{title}}\n{{date}} {{time}}");
-		await dailyNotes.getOrCreateToday();
+		await dailyNotes.getOrCreate(0);
 		expect(vault.files.get("29.09.2026.md")).toBe("# 29.09.2026\n29.09.2026 07:04");
 	});
 
 	it("creates an empty note and warns when the template is missing", async () => {
 		const { vault, warnings, dailyNotes } = setup({ template: "Templates/Gone" });
-		await dailyNotes.getOrCreateToday();
+		await dailyNotes.getOrCreate(0);
 		expect(vault.files.get("2026-09-29.md")).toBe("");
 		expect(warnings).toEqual(["Daily note template not found: Templates/Gone"]);
 	});
 
 	it("falls back to defaults when the Daily notes plugin is disabled", async () => {
 		const { vault, dailyNotes } = setup({ folder: "Journal", format: "DD.MM.YYYY" }, false);
-		expect(await dailyNotes.getOrCreateToday()).toBe("2026-09-29.md");
+		expect(await dailyNotes.getOrCreate(0)).toBe("2026-09-29.md");
 		expect(vault.files.has("2026-09-29.md")).toBe(true);
 	});
 
 	it("reports today's path without creating the note", () => {
 		const { vault, dailyNotes } = setup({ folder: "Journal/Daily notes", format: "YYYY-MM-DD" });
-		expect(dailyNotes.todayPath()).toBe("Journal/Daily notes/2026-09-29.md");
+		expect(dailyNotes.path(0)).toBe("Journal/Daily notes/2026-09-29.md");
 		expect(vault.files.size).toBe(0);
+	});
+
+	it("reports and creates the note of an earlier day from the template with that day's date", async () => {
+		const { vault, dailyNotes } = setup({ folder: "Journal", format: "YYYY-MM-DD", template: "Templates/Daily" });
+		vault.files.set("Templates/Daily.md", "# {{title}}\n{{date}}");
+		expect(dailyNotes.path(1)).toBe("Journal/2026-09-28.md");
+		expect(await dailyNotes.getOrCreate(1)).toBe("Journal/2026-09-28.md");
+		expect(vault.files.get("Journal/2026-09-28.md")).toBe("# 2026-09-28\n2026-09-28");
+	});
+
+	it("returns an earlier day's existing note untouched", async () => {
+		const { vault, dailyNotes } = setup({ format: "YYYY-MM-DD" });
+		vault.files.set("2026-09-27.md", "existing");
+		expect(await dailyNotes.getOrCreate(2)).toBe("2026-09-27.md");
+		expect(vault.files.get("2026-09-27.md")).toBe("existing");
 	});
 });

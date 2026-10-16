@@ -6,6 +6,7 @@ import {
 	CaptureMode,
 	EntryFormat,
 	HeadingLevelChoice,
+	isDaysBack,
 	listDestinations,
 	ModeFile,
 	modeTagGroups,
@@ -111,7 +112,7 @@ export class SettingsTab extends PluginSettingTab {
 
 		label(body, "Name");
 		new TextComponent(line(body))
-			.setPlaceholder(isDaily ? "Today's date" : "Name, e.g. Books")
+			.setPlaceholder(isDaily ? "Date of the day" : "Name, e.g. Books")
 			.setValue(mode.title)
 			.onChange((value) => {
 				mode.title = value;
@@ -153,6 +154,7 @@ export class SettingsTab extends PluginSettingTab {
 		this.targetOption(options, mode, "files", "Files");
 		const lockHint = hint(body, "Remove the files below to switch to the daily note.");
 		const target = mode.target;
+		if (target.type === "daily") this.daysBackField(body, target);
 		let filesHint: HTMLElement | null = null;
 		if (target.type === "files") {
 			target.files.forEach((file, index) => this.fileLine(body, target.files, file, index));
@@ -167,7 +169,7 @@ export class SettingsTab extends PluginSettingTab {
 			daily.disabled = locked;
 			lockHint.toggle(locked);
 			filesHint?.setText(
-				listDestinations([mode], "").length === 0
+				listDestinations([mode], () => "").length === 0
 					? "Add a file to see this mode on the capture screen."
 					: "Each file shows up on the capture screen by its alias, or by its name when the alias is empty.",
 			);
@@ -179,10 +181,25 @@ export class SettingsTab extends PluginSettingTab {
 		option.toggleClass("is-active", mode.target.type === type);
 		option.addEventListener("click", async () => {
 			if (mode.target.type === type || hasFiles(mode)) return;
-			mode.target = type === "daily" ? { type: "daily" } : { type: "files", files: [emptyFile()] };
+			mode.target = type === "daily" ? { type: "daily", daysBack: 0 } : { type: "files", files: [emptyFile()] };
 			await this.saveAndRedraw();
 		});
 		return option;
+	}
+
+	private daysBackField(body: HTMLElement, target: { daysBack: number }): void {
+		label(body, "Days back");
+		const field = new TextComponent(line(body)).setValue(String(target.daysBack)).onChange((value) => {
+			const daysBack = Number(value);
+			if (value.trim() === "" || !isDaysBack(daysBack)) return;
+			target.daysBack = daysBack;
+			return this.changed();
+		});
+		field.inputEl.type = "number";
+		field.inputEl.min = "0";
+		field.inputEl.step = "1";
+		field.inputEl.addClass("dqc-days-back");
+		hint(body, "0 writes to today's note, 1 to yesterday's. Days follow Day ends at.");
 	}
 
 	private fileLine(body: HTMLElement, files: ModeFile[], file: ModeFile, index: number): void {

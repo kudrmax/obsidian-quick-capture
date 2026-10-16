@@ -1,7 +1,7 @@
 import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
 import { systemClock } from "./domain/Clock";
-import { DiaryDayClock } from "./domain/DiaryDayClock";
+import { daysBefore, DiaryDayClock } from "./domain/DiaryDayClock";
 import { listDestinations, markUsed, movePaths, pickDestination } from "./domain/CaptureMode";
 import { HtmlAudioPlayer } from "./infrastructure/HtmlAudioPlayer";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
@@ -11,10 +11,15 @@ import { ObsidianNoteTargets } from "./infrastructure/ObsidianNoteTargets";
 import { ObsidianNoteWriter } from "./infrastructure/ObsidianNoteWriter";
 import { CaptureSettings, loadSettings } from "./settings";
 import { CaptureModal } from "./ui/CaptureModal";
-import { NO_DESTINATIONS, todayTitle } from "./ui/CaptureScreen";
+import { dateTitle, NO_DESTINATIONS } from "./ui/CaptureScreen";
 import { SettingsHost, SettingsTab } from "./ui/SettingsTab";
 
 const DESTINATION_COMMAND_PREFIX = "capture-";
+
+function commandDayTitle(daysBack: number): string {
+	if (daysBack === 0) return "daily note";
+	return `daily note (${daysBack} ${daysBack === 1 ? "day" : "days"} back)`;
+}
 
 export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 	override settings: CaptureSettings = loadSettings(null);
@@ -35,8 +40,9 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 			settings: () => this.settings,
 		});
 		this.openCapture = (destinationId, fallBackToFirst) => {
-			const today = todayTitle(diaryClock.now());
-			const destinations = listDestinations(this.settings.modes, today);
+			const today = diaryClock.now();
+			const dayTitle = (daysBack: number) => dateTitle(daysBefore(today, daysBack));
+			const destinations = listDestinations(this.settings.modes, dayTitle);
 			const destination = fallBackToFirst
 				? pickDestination(destinations, destinationId)
 				: destinations.find((candidate) => candidate.id === destinationId);
@@ -50,7 +56,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 				createPlayer: () => new HtmlAudioPlayer(),
 				settings: () => this.settings,
 				destination,
-				today,
+				dayTitle,
 				onDestinationChange: (id) => {
 					this.settings.lastDestinationId = id;
 					void this.saveSettings();
@@ -82,7 +88,7 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 
 	private syncDestinationCommands(): void {
 		for (const id of this.destinationCommandIds) this.removeCommandById(id);
-		this.destinationCommandIds = listDestinations(this.settings.modes, "daily note").map((destination) => {
+		this.destinationCommandIds = listDestinations(this.settings.modes, commandDayTitle).map((destination) => {
 			const id = `${DESTINATION_COMMAND_PREFIX}${destination.id}`;
 			this.addCommand({ id, name: `Capture to ${destination.title}`, callback: () => this.openCapture(destination.id, false) });
 			return id;

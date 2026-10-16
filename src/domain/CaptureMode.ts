@@ -27,7 +27,7 @@ export type AfterSendChoice = "default" | AfterSend;
 
 export type AudioLinkChoice = "default" | "embed" | "link";
 
-export type NoteTarget = { type: "daily" } | { type: "file"; path: string; wasWritten?: boolean };
+export type NoteTarget = { type: "daily"; daysBack: number } | { type: "file"; path: string; wasWritten?: boolean };
 
 export interface ModeFile {
 	id: string;
@@ -37,7 +37,7 @@ export interface ModeFile {
 	writtenPath?: string;
 }
 
-export type ModeTarget = { type: "daily" } | { type: "files"; files: ModeFile[] };
+export type ModeTarget = { type: "daily"; daysBack: number } | { type: "files"; files: ModeFile[] };
 
 export interface CaptureMode {
 	id: string;
@@ -100,10 +100,15 @@ export function modeTagGroups<G extends { id: string }>(groups: G[], mode: Captu
 	return groups.filter((group) => mode.tagGroupIds.includes(group.id));
 }
 
-export function listDestinations(modes: CaptureMode[], today: string): Destination[] {
+export function isDaysBack(value: unknown): value is number {
+	return Number.isInteger(value) && (value as number) >= 0;
+}
+
+export function listDestinations(modes: CaptureMode[], dayTitle: (daysBack: number) => string): Destination[] {
 	return modes.flatMap((mode): Destination[] => {
 		if (mode.target.type === "daily") {
-			return [{ id: mode.id, mode, title: mode.title.trim() || today, target: { type: "daily" } }];
+			const { daysBack } = mode.target;
+			return [{ id: mode.id, mode, title: mode.title.trim() || dayTitle(daysBack), target: { type: "daily", daysBack } }];
 		}
 		return byLastUse(mode.target.files.filter((file) => isNotePath(file.path))).map((file) => ({
 			id: file.id,

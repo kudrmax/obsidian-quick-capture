@@ -26,17 +26,20 @@ class FakeVault {
 
 function setup() {
 	const vault = new FakeVault();
-	const daily = { getOrCreateToday: async () => "Daily/today.md", todayPath: () => "Daily/today.md" };
+	const day = (daysBack: number) => `Daily/${daysBack}.md`;
+	const daily = { getOrCreate: async (daysBack: number) => day(daysBack), path: day };
 	const warnings: string[] = [];
 	const targets = new ObsidianNoteTargets({ vault } as unknown as App, daily, (message) => warnings.push(message));
 	return { vault, targets, warnings };
 }
 
 describe("ObsidianNoteTargets", () => {
-	it("uses today's daily note for the daily target", async () => {
+	it("uses the daily note of the target's day", async () => {
 		const { targets } = setup();
-		expect(await targets.resolve({ type: "daily" })).toBe("Daily/today.md");
-		expect(targets.previewPath({ type: "daily" })).toBe("Daily/today.md");
+		expect(await targets.resolve({ type: "daily", daysBack: 0 })).toBe("Daily/0.md");
+		expect(targets.previewPath({ type: "daily", daysBack: 0 })).toBe("Daily/0.md");
+		expect(await targets.resolve({ type: "daily", daysBack: 1 })).toBe("Daily/1.md");
+		expect(targets.previewPath({ type: "daily", daysBack: 1 })).toBe("Daily/1.md");
 	});
 
 	it("returns an existing file untouched", async () => {

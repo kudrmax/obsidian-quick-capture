@@ -4,8 +4,8 @@ import { NoteTarget } from "../domain/CaptureMode";
 import { ensureParentFolder } from "./VaultFolders";
 
 export interface DailyNotes {
-	getOrCreateToday(): Promise<string>;
-	todayPath(): string;
+	getOrCreate(daysBack: number): Promise<string>;
+	path(daysBack: number): string;
 }
 
 export class ObsidianNoteTargets implements NoteTargets {
@@ -16,7 +16,7 @@ export class ObsidianNoteTargets implements NoteTargets {
 	) {}
 
 	async resolve(target: NoteTarget): Promise<string> {
-		if (target.type === "daily") return this.daily.getOrCreateToday();
+		if (target.type === "daily") return this.daily.getOrCreate(target.daysBack);
 		const path = this.previewPath(target);
 		if (this.app.vault.getFileByPath(path)) return path;
 		await ensureParentFolder(this.app.vault, path);
@@ -28,6 +28,6 @@ export class ObsidianNoteTargets implements NoteTargets {
 	}
 
 	previewPath(target: NoteTarget): string {
-		return target.type === "daily" ? this.daily.todayPath() : normalizePath(target.path.trim());
+		return target.type === "daily" ? this.daily.path(target.daysBack) : normalizePath(target.path.trim());
 	}
 }

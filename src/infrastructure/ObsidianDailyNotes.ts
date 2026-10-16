@@ -1,5 +1,6 @@
 import { App, moment, normalizePath, TFile } from "obsidian";
 import { Clock } from "../domain/Clock";
+import { daysBefore } from "../domain/DiaryDayClock";
 import { dailyNotePath, renderDailyTemplate } from "../domain/DailyNoteTemplate";
 import { DailyNotes } from "./ObsidianNoteTargets";
 import { ensureParentFolder } from "./VaultFolders";
@@ -26,21 +27,25 @@ export class ObsidianDailyNotes implements DailyNotes {
 		private readonly warn: (message: string) => void,
 	) {}
 
-	todayPath(): string {
-		return this.pathFor(this.options(), this.clock.now());
+	path(daysBack: number): string {
+		return this.pathFor(this.options(), this.day(daysBack));
 	}
 
-	async getOrCreateToday(): Promise<string> {
+	async getOrCreate(daysBack: number): Promise<string> {
 		const options = this.options();
-		const now = this.clock.now();
-		const path = this.pathFor(options, now);
+		const day = this.day(daysBack);
+		const path = this.pathFor(options, day);
 		if (this.app.vault.getFileByPath(path)) return path;
 
 		await ensureParentFolder(this.app.vault, path);
 		const title = path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/, "");
 		const template = await this.readTemplate(options.template ?? "");
-		await this.app.vault.create(path, renderDailyTemplate(template, title, now, formatDate, options.format ?? ""));
+		await this.app.vault.create(path, renderDailyTemplate(template, title, day, formatDate, options.format ?? ""));
 		return path;
+	}
+
+	private day(daysBack: number): Date {
+		return daysBefore(this.clock.now(), daysBack);
 	}
 
 	private pathFor(options: DailyNotesOptions, date: Date): string {
