@@ -3,6 +3,7 @@ import {
 	CaptureMode,
 	destinationProblem,
 	EntryFormat,
+	isDaysBack,
 	listDestinations,
 	markUsed,
 	movePaths,
@@ -26,7 +27,7 @@ const DEFAULTS: EntryFormat = {
 };
 
 function mode(overrides: Partial<CaptureMode> = {}): CaptureMode {
-	return { id: "m", title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], ...overrides };
+	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], ...overrides };
 }
 
 describe("resolveFormat", () => {
@@ -87,21 +88,29 @@ function filesMode(id: string, files: ModeFile[]): CaptureMode {
 }
 
 const TODAY = "30 September 2026";
+const dayTitle = (daysBack: number) => (daysBack === 0 ? TODAY : `${daysBack} days back`);
 
 describe("listDestinations", () => {
 	it("lists a daily mode as one destination titled with today's date", () => {
-		expect(listDestinations([mode({ id: "daily" })], TODAY)).toMatchObject([
-			{ id: "daily", title: TODAY, target: { type: "daily" } },
+		expect(listDestinations([mode({ id: "daily" })], dayTitle)).toMatchObject([
+			{ id: "daily", title: TODAY, target: { type: "daily", daysBack: 0 } },
+		]);
+	});
+
+	it("titles a daily mode for an earlier day with that day's date and keeps how far back it is", () => {
+		const yesterday = mode({ id: "yesterday", target: { type: "daily", daysBack: 1 } });
+		expect(listDestinations([yesterday], dayTitle)).toMatchObject([
+			{ id: "yesterday", title: "1 days back", target: { type: "daily", daysBack: 1 } },
 		]);
 	});
 
 	it("titles a daily mode with its own title", () => {
-		expect(listDestinations([mode({ title: " Дневник " })], TODAY)[0].title).toBe("Дневник");
+		expect(listDestinations([mode({ title: " Дневник " })], dayTitle)[0].title).toBe("Дневник");
 	});
 
 	it("lists every file of a files mode flat, after the modes before it", () => {
 		const books = filesMode("books", [file("a", "Reading/Мастер и Маргарита.md", "Мастер"), file("b", "Library/Сапиенс.md")]);
-		const list = listDestinations([mode({ id: "daily" }), books], TODAY);
+		const list = listDestinations([mode({ id: "daily" }), books], dayTitle);
 		expect(list.map((d) => [d.id, d.title])).toEqual([
 			["daily", TODAY],
 			["a", "Мастер"],
@@ -113,21 +122,33 @@ describe("listDestinations", () => {
 
 	it("puts the most recently used files of a mode first and never used ones after them in settings order", () => {
 		const books = filesMode("books", [file("a", "A.md", "", 0), file("b", "B.md", "", 5), file("c", "C.md", "", 0), file("d", "D.md", "", 9)]);
-		expect(listDestinations([books], TODAY).map((d) => d.id)).toEqual(["d", "b", "a", "c"]);
+		expect(listDestinations([books], dayTitle).map((d) => d.id)).toEqual(["d", "b", "a", "c"]);
 	});
 
 	it("skips files without a markdown path", () => {
 		const books = filesMode("books", [file("a", " "), file("b", "x.txt"), file("c", "C.md")]);
-		expect(listDestinations([books], TODAY).map((d) => d.id)).toEqual(["c"]);
+		expect(listDestinations([books], dayTitle).map((d) => d.id)).toEqual(["c"]);
 	});
 
 	it("gives nothing for a files mode without files", () => {
-		expect(listDestinations([filesMode("books", [])], TODAY)).toEqual([]);
+		expect(listDestinations([filesMode("books", [])], dayTitle)).toEqual([]);
+	});
+});
+
+describe("isDaysBack", () => {
+	it("accepts only whole days from today backwards", () => {
+		expect(isDaysBack(0)).toBe(true);
+		expect(isDaysBack(1)).toBe(true);
+		expect(isDaysBack(30)).toBe(true);
+		expect(isDaysBack(-1)).toBe(false);
+		expect(isDaysBack(1.5)).toBe(false);
+		expect(isDaysBack("1")).toBe(false);
+		expect(isDaysBack(undefined)).toBe(false);
 	});
 });
 
 describe("pickDestination", () => {
-	const list = listDestinations([mode({ id: "daily" }), filesMode("books", [file("a", "A.md")])], TODAY);
+	const list = listDestinations([mode({ id: "daily" }), filesMode("books", [file("a", "A.md")])], dayTitle);
 
 	it("finds the destination by id", () => {
 		expect(pickDestination(list, "a")?.id).toBe("a");
@@ -155,14 +176,14 @@ describe("markUsed", () => {
 
 	it("makes the written file required from then on", () => {
 		const books = filesMode("books", [file("a", " /Books//A.md ")]);
-		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: false });
+		expect(listDestinations([books], dayTitle)[0].target).toMatchObject({ wasWritten: false });
 		markUsed([books], "a", 42);
-		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: true });
+		expect(listDestinations([books], dayTitle)[0].target).toMatchObject({ wasWritten: true });
 	});
 
 	it("lets a file be created again once its path is edited", () => {
 		const books = filesMode("books", [{ ...file("a", "New.md"), writtenPath: "Old.md" }]);
-		expect(listDestinations([books], TODAY)[0].target).toMatchObject({ wasWritten: false });
+		expect(listDestinations([books], dayTitle)[0].target).toMatchObject({ wasWritten: false });
 	});
 });
 
@@ -206,14 +227,14 @@ describe("movePaths", () => {
 
 describe("destinationProblem", () => {
 	it("accepts the daily note and a markdown file", () => {
-		const [daily, book] = listDestinations([mode({ id: "daily" }), filesMode("books", [file("a", "A.md")])], TODAY);
+		const [daily, book] = listDestinations([mode({ id: "daily" }), filesMode("books", [file("a", "A.md")])], dayTitle);
 		expect(destinationProblem(daily)).toBeNull();
 		expect(destinationProblem(book)).toBeNull();
 	});
 
 	it("asks to choose a file when the path is not a note", () => {
 		const books = filesMode("books", [file("a", "A.md", "Мастер")]);
-		const [book] = listDestinations([books], TODAY);
+		const [book] = listDestinations([books], dayTitle);
 		expect(destinationProblem({ ...book, target: { type: "file", path: "a.txt" } })).toBe('Choose a file for "Мастер"');
 	});
 });

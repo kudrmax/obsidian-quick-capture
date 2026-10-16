@@ -24,7 +24,7 @@ export interface CaptureScreenOptions {
 	createPlayer: () => AudioPlayer;
 	settings: () => CaptureSettings;
 	initial: Destination;
-	today: string;
+	dayTitle: (daysBack: number) => string;
 	onDestinationChange: (id: string) => void;
 	onCaptured: (id: string) => void;
 	openNote: (entry: CapturedEntry) => void;
@@ -47,7 +47,7 @@ const SAMPLE_INTERVAL_MS = 60;
 
 export const NO_DESTINATIONS = "Add a file in Quick Capture settings";
 
-export function todayTitle(date: Date): string {
+export function dateTitle(date: Date): string {
 	return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 const SWIPE_DISTANCE_PX = 60;
@@ -167,7 +167,7 @@ export class CaptureScreen {
 	}
 
 	private destinations(): Destination[] {
-		return listDestinations(this.options.settings().modes, this.options.today);
+		return listDestinations(this.options.settings().modes, this.options.dayTitle);
 	}
 
 	private destination(): Destination {

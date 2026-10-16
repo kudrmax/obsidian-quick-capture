@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DiaryDayClock, isDayEnd } from "../src/domain/DiaryDayClock";
+import { daysBefore, DiaryDayClock, isDayEnd } from "../src/domain/DiaryDayClock";
 
 const at = (date: Date, dayEnd = "05:00") => new DiaryDayClock({ now: () => date }, () => dayEnd).now();
 
@@ -37,5 +37,18 @@ describe("isDayEnd", () => {
 		expect(isDayEnd("5:00")).toBe(false);
 		expect(isDayEnd("24:00")).toBe(false);
 		expect(isDayEnd(5)).toBe(false);
+	});
+});
+
+describe("daysBefore", () => {
+	it("goes back whole days and keeps the time", () => {
+		expect(daysBefore(new Date(2026, 9, 16, 8, 30), 0)).toEqual(new Date(2026, 9, 16, 8, 30));
+		expect(daysBefore(new Date(2026, 9, 16, 8, 30), 1)).toEqual(new Date(2026, 9, 15, 8, 30));
+		expect(daysBefore(new Date(2026, 0, 1, 8, 30), 2)).toEqual(new Date(2025, 11, 30, 8, 30));
+	});
+
+	it("counts from the diary day, so at night yesterday is the day before the previous date", () => {
+		const diaryDay = new DiaryDayClock({ now: () => new Date(2026, 9, 16, 2, 0) }, () => "05:00").now();
+		expect(daysBefore(diaryDay, 1)).toEqual(new Date(2026, 9, 14, 2, 0));
 	});
 });

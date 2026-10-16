@@ -903,6 +903,10 @@ body.is-mobile .dqc-controls {
 	padding-bottom: 4px;
 }
 
+.dqc-days-back {
+	width: 6em;
+}
+
 .dqc-time-input {
 	height: var(--input-height);
 	padding: var(--size-4-1) var(--size-4-2);

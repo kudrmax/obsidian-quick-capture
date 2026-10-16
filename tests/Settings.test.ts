@@ -27,7 +27,7 @@ describe("loadSettings", () => {
 		expect(settings.defaults).toEqual(DEFAULT_SETTINGS.defaults);
 		expect(settings.tagGroups).toEqual([]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [] },
+			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [] },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 	});
@@ -46,7 +46,7 @@ describe("loadSettings", () => {
 		expect(settings.afterSend).toBe("stay");
 		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0] }]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily" }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"] },
+			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"] },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 		expect(settings).not.toHaveProperty("heading");
@@ -73,6 +73,24 @@ describe("loadSettings", () => {
 		});
 		saved.lastDestinationId = "b";
 		expect(loadSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+	});
+
+	it("makes daily modes saved before the day choice write to today and keeps a valid number of days back", () => {
+		const saved = JSON.parse(JSON.stringify(loadSettings(LEGACY)));
+		const daily = saved.modes[0];
+		const settings = loadSettings({
+			...saved,
+			modes: [
+				{ ...daily, target: { type: "daily" } },
+				{ ...daily, id: "yesterday", target: { type: "daily", daysBack: 1 } },
+				{ ...daily, id: "broken", target: { type: "daily", daysBack: -2 } },
+			],
+		});
+		expect(settings.modes.map((mode) => mode.target)).toEqual([
+			{ type: "daily", daysBack: 0 },
+			{ type: "daily", daysBack: 1 },
+			{ type: "daily", daysBack: 0 },
+		]);
 	});
 
 	it("turns a single-file mode into a files mode that keeps its id, title and command", () => {

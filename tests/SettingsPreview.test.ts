@@ -43,7 +43,12 @@ describe("previewEntries", () => {
 
 describe("modeSummary", () => {
 	it("names the daily note and the inherited heading", () => {
-		expect(modeSummary(mode({ type: "daily" }), DEFAULTS)).toBe("Daily note · under “Journal”");
+		expect(modeSummary(mode({ type: "daily", daysBack: 0 }), DEFAULTS)).toBe("Daily note · under “Journal”");
+	});
+
+	it("says how many days back a daily mode writes", () => {
+		expect(modeSummary(mode({ type: "daily", daysBack: 1 }), DEFAULTS)).toBe("Daily note, 1 day back · under “Journal”");
+		expect(modeSummary(mode({ type: "daily", daysBack: 3 }), DEFAULTS)).toBe("Daily note, 3 days back · under “Journal”");
 	});
 
 	it("names a single file by its alias, or by its note name without one", () => {
@@ -62,11 +67,11 @@ describe("modeSummary", () => {
 
 	it("says end of note when the mode has no heading", () => {
 		const overrides = { ...NO_OVERRIDES, headingLevel: "none" as const };
-		expect(modeSummary(mode({ type: "daily" }, overrides), DEFAULTS)).toBe("Daily note · end of note");
-		expect(modeSummary(mode({ type: "daily" }), { ...DEFAULTS, heading: "" })).toBe("Daily note · end of note");
+		expect(modeSummary(mode({ type: "daily", daysBack: 0 }, overrides), DEFAULTS)).toBe("Daily note · end of note");
+		expect(modeSummary(mode({ type: "daily", daysBack: 0 }), { ...DEFAULTS, heading: "" })).toBe("Daily note · end of note");
 	});
 
 	it("uses the mode's own heading over the default", () => {
-		expect(modeSummary(mode({ type: "daily" }, { ...NO_OVERRIDES, heading: "Дневник" }), DEFAULTS)).toBe("Daily note · under “Дневник”");
+		expect(modeSummary(mode({ type: "daily", daysBack: 0 }, { ...NO_OVERRIDES, heading: "Дневник" }), DEFAULTS)).toBe("Daily note · under “Дневник”");
 	});
 });

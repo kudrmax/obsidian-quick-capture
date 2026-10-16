@@ -1,4 +1,4 @@
-import { AfterSend, CaptureMode, EntryFormat, NO_OVERRIDES } from "./domain/CaptureMode";
+import { AfterSend, CaptureMode, EntryFormat, isDaysBack, ModeTarget, NO_OVERRIDES } from "./domain/CaptureMode";
 import { DEFAULT_DAY_END, isDayEnd } from "./domain/DiaryDayClock";
 import { parseHeading } from "./domain/SectionInserter";
 
@@ -59,10 +59,12 @@ export function loadSettings(saved: unknown): CaptureSettings {
 
 type ModeChoices = "afterSend" | "audioLink";
 type SavedMode = Omit<CaptureMode, ModeChoices> & Partial<Pick<CaptureMode, ModeChoices>>;
+type SavedTarget = ModeTarget | { type: "daily"; daysBack?: unknown };
+type MultiFileMode = Omit<SavedMode, "target"> & { target: SavedTarget };
 type SingleFileMode = Omit<SavedMode, "target"> & { target: { type: "file"; path: string } };
 
 interface SavedSettings extends Omit<CaptureSettings, "modes"> {
-	modes: (SavedMode | SingleFileMode)[];
+	modes: (MultiFileMode | SingleFileMode)[];
 	lastModeId?: string;
 }
 
@@ -77,7 +79,11 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 	};
 }
 
-function toFilesMode(mode: SavedMode | SingleFileMode): SavedMode {
+function toFilesMode(mode: MultiFileMode | SingleFileMode): SavedMode {
+	if (mode.target.type === "daily") {
+		const daysBack = isDaysBack(mode.target.daysBack) ? mode.target.daysBack : 0;
+		return { ...mode, target: { type: "daily", daysBack } };
+	}
 	if (mode.target.type !== "file") return mode as SavedMode;
 	const file = { id: mode.id, alias: mode.title, path: mode.target.path, lastUsedAt: 0 };
 	return { ...mode, target: { type: "files", files: [file] } };
@@ -113,5 +119,5 @@ function pickFormat(legacy: Partial<LegacySettings>): Partial<EntryFormat> {
 }
 
 function dailyMode(tagGroupIds: string[]): CaptureMode {
-	return { id: DAILY_MODE_ID, title: "", target: { type: "daily" }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds };
+	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds };
 }
