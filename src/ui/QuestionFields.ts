@@ -105,9 +105,18 @@ export class QuestionFields {
 			this.options.onInput();
 		});
 		textarea.addEventListener("scroll", () => (highlight.scrollTop = textarea.scrollTop));
-		voiceEl.addEventListener("click", () => this.select(field));
+		el.addEventListener("click", () => this.focus(field));
 		this.options.decorate(textarea);
 		return field;
+	}
+
+	focusCurrent(): void {
+		if (this.current) this.focus(this.current);
+	}
+
+	private focus(field: Field): void {
+		if (field.recording) this.select(field);
+		else if (document.activeElement !== field.textarea) field.textarea.focus();
 	}
 
 	private select(field: Field): void {

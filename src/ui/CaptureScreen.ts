@@ -98,7 +98,9 @@ export class CaptureScreen {
 
 		const body = this.root.createDiv({ cls: "dqc-body" });
 		body.addEventListener("click", (event) => {
-			if (this.state === "input" && !this.questionFields.hasQuestions() && event.target !== this.textarea) this.textarea.focus();
+			if (this.state !== "input" || event.target instanceof HTMLTextAreaElement) return;
+			if (this.questionFields.hasQuestions()) this.questionFields.focusCurrent();
+			else this.textarea.focus();
 		});
 		this.titleEl = body.createDiv({ cls: "dqc-title" });
 		this.titleEl.addEventListener("click", (event) => {

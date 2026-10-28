@@ -156,7 +156,7 @@
 }
 
 .dqc-screen.has-questions .dqc-title {
-	margin-bottom: var(--dqc-field-gap);
+	margin-bottom: calc(var(--dqc-field-gap) / 2);
 }
 
 .dqc-screen.has-questions .dqc-body > .dqc-editor {
@@ -168,9 +168,13 @@
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	gap: var(--dqc-field-gap);
 	overflow-y: auto;
 	scrollbar-width: none;
+}
+
+.dqc-field {
+	padding: calc(var(--dqc-field-gap) / 2) 0;
+	cursor: text;
 }
 
 .dqc-fields::-webkit-scrollbar {
