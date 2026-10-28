@@ -34,7 +34,6 @@ export class QuestionFields {
 		this.el.empty();
 		this.fields = questions.map((question) => this.createField(question));
 		this.current = this.fields[0] ?? null;
-		this.markCurrent();
 		return this.fields;
 	}
 
@@ -73,6 +72,7 @@ export class QuestionFields {
 		field.voiceEl.empty();
 		setIcon(field.voiceEl.createSpan(), "mic");
 		field.voiceEl.appendText(`Voice answer · ${duration}`);
+		markFilled(field);
 	}
 
 	removeVoiceAnswer(): void {
@@ -81,6 +81,7 @@ export class QuestionFields {
 		field.recording = null;
 		field.el.removeClass("has-voice");
 		field.voiceEl.empty();
+		markFilled(field);
 	}
 
 	setReadOnly(readOnly: boolean): void {
@@ -89,32 +90,43 @@ export class QuestionFields {
 
 	private createField(question: Question): Field {
 		const el = this.el.createDiv({ cls: "dqc-field" });
-		el.createDiv({ cls: "dqc-question", text: question.required ? `${question.text.trim()} *` : question.text.trim() });
+		el.createDiv({ cls: "dqc-question", text: question.text.trim() });
 		const editorEl = el.createDiv({ cls: "dqc-editor" });
 		const highlight = editorEl.createDiv({ cls: "dqc-highlight", attr: { "aria-hidden": "true" } });
 		const textarea = editorEl.createEl("textarea", {
 			cls: "dqc-text",
-			attr: { rows: "1", placeholder: "…", "aria-label": question.text.trim() },
+			attr: { rows: "1", placeholder: question.text.trim(), "aria-label": question.text.trim() },
 		});
 		const voiceEl = el.createDiv({ cls: "dqc-voice" });
 		const field: Field = { question, el, textarea, highlight, voiceEl, recording: null };
 		textarea.addEventListener("focus", () => this.select(field));
-		textarea.addEventListener("input", () => this.options.onInput());
+		textarea.addEventListener("input", () => {
+			markFilled(field);
+			this.options.onInput();
+		});
 		textarea.addEventListener("scroll", () => (highlight.scrollTop = textarea.scrollTop));
-		voiceEl.addEventListener("click", () => this.select(field));
+		el.addEventListener("click", () => this.focus(field));
 		this.options.decorate(textarea);
 		return field;
 	}
 
-	private select(field: Field): void {
-		this.current = field;
-		this.markCurrent();
-		this.options.onFocus(field);
+	focusCurrent(): void {
+		if (this.current) this.focus(this.current);
 	}
 
-	private markCurrent(): void {
-		for (const field of this.fields) field.el.toggleClass("is-current", field === this.current);
+	private focus(field: Field): void {
+		if (field.recording) this.select(field);
+		else if (document.activeElement !== field.textarea) field.textarea.focus();
 	}
+
+	private select(field: Field): void {
+		this.current = field;
+		this.options.onFocus(field);
+	}
+}
+
+function markFilled(field: Field): void {
+	field.el.toggleClass("is-filled", hasAnswer(field));
 }
 
 function hasAnswer(field: Field): boolean {
