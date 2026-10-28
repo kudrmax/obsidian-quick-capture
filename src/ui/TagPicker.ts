@@ -39,7 +39,7 @@ export class TagPicker {
 
 	private render(): void {
 		this.layerEl.empty();
-		for (const { name, tags } of tagSections(this.groups())) {
+		for (const { name, tags, closeOnPick } of tagSections(this.groups())) {
 			const groupEl = this.layerEl.createDiv({ cls: "dqc-tags-group" });
 			if (name !== null) groupEl.createDiv({ cls: "dqc-tags-group-name", text: name });
 			const row = groupEl.createDiv({ cls: "dqc-tags-row" });
@@ -52,7 +52,8 @@ export class TagPicker {
 					if (this.selected.has(tag)) this.selected.delete(tag);
 					else this.selected.add(tag);
 					button.toggleClass("is-selected", this.selected.has(tag));
-					this.close();
+					if (closeOnPick) this.close();
+					else this.onChange();
 				};
 			}
 		}
@@ -66,11 +67,12 @@ export function hasQuickTags(groups: TagGroup[]): boolean {
 export interface TagSection {
 	name: string | null;
 	tags: QuickTag[];
+	closeOnPick: boolean;
 }
 
 export function tagSections(groups: TagGroup[]): TagSection[] {
 	const filled = groups
-		.map((group) => ({ name: group.name.trim(), tags: group.tags.filter((quickTag) => quickTag.tag.trim() !== "") }))
+		.map((group) => ({ ...group, name: group.name.trim(), tags: group.tags.filter((quickTag) => quickTag.tag.trim() !== "") }))
 		.filter((group) => group.tags.length > 0);
-	return filled.map(({ name, tags }) => ({ name: filled.length > 1 && name !== "" ? name : null, tags }));
+	return filled.map(({ name, tags, closeOnPick }) => ({ name: filled.length > 1 && name !== "" ? name : null, tags, closeOnPick }));
 }
