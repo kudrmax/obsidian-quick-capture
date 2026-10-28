@@ -8,6 +8,8 @@ export interface EntryFormat {
 	textSuffix: string;
 	audioPrefix: string;
 	audioSuffix: string;
+	answerPrefix: string;
+	answerSuffix: string;
 }
 
 export type HeadingLevelChoice = "default" | "none" | number;
@@ -19,6 +21,8 @@ export interface FormatOverrides {
 	textSuffix: string;
 	audioPrefix: string;
 	audioSuffix: string;
+	answerPrefix: string;
+	answerSuffix: string;
 }
 
 export type AfterSend = "close" | "stay" | "open";
@@ -39,6 +43,11 @@ export interface ModeFile {
 
 export type ModeTarget = { type: "daily"; daysBack: number } | { type: "files"; files: ModeFile[] };
 
+export interface Question {
+	text: string;
+	required: boolean;
+}
+
 export interface CaptureMode {
 	id: string;
 	title: string;
@@ -47,6 +56,7 @@ export interface CaptureMode {
 	afterSend: AfterSendChoice;
 	audioLink: AudioLinkChoice;
 	tagGroupIds: string[];
+	questions: Question[];
 }
 
 export interface Destination {
@@ -60,6 +70,7 @@ export interface ResolvedFormat {
 	heading: HeadingTarget | null;
 	text: EntryTemplate;
 	audio: EntryTemplate;
+	answer: EntryTemplate;
 }
 
 export const NO_OVERRIDES: FormatOverrides = {
@@ -69,6 +80,8 @@ export const NO_OVERRIDES: FormatOverrides = {
 	textSuffix: "",
 	audioPrefix: "",
 	audioSuffix: "",
+	answerPrefix: "",
+	answerSuffix: "",
 };
 
 export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides): ResolvedFormat {
@@ -85,6 +98,10 @@ export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides)
 			prefix: pick(overrides.audioPrefix, defaults.audioPrefix),
 			suffix: pick(overrides.audioSuffix, defaults.audioSuffix),
 		},
+		answer: {
+			prefix: pick(overrides.answerPrefix, defaults.answerPrefix),
+			suffix: pick(overrides.answerSuffix, defaults.answerSuffix),
+		},
 	};
 }
 
@@ -94,6 +111,10 @@ export function resolveAfterSend(defaultChoice: AfterSend, mode: CaptureMode): A
 
 export function resolveEmbedAudio(defaultEmbed: boolean, mode: CaptureMode): boolean {
 	return mode.audioLink === "default" ? defaultEmbed : mode.audioLink === "embed";
+}
+
+export function askedQuestions(mode: CaptureMode): Question[] {
+	return mode.questions.filter((question) => question.text.trim() !== "");
 }
 
 export function modeTagGroups<G extends { id: string }>(groups: G[], mode: CaptureMode): G[] {

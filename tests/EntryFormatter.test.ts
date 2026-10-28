@@ -26,6 +26,16 @@ describe("EntryFormatter", () => {
 		);
 	});
 
+	it("replaces every {{question}} with the question it answers", () => {
+		expect(formatter.format({ prefix: "\t- **{{question}}** ", suffix: " ({{question}})" }, "x", [], "Как встал?")).toBe(
+			"\t- **Как встал?** x (Как встал?)",
+		);
+	});
+
+	it("keeps placeholders inside the question literally", () => {
+		expect(formatter.format({ prefix: "{{question}} ", suffix: "" }, "x", [], "Why {{time}}?")).toBe("Why {{time}}? x");
+	});
+
 	it("keeps multiline content as is", () => {
 		expect(formatter.format({ prefix: "- ", suffix: " #t" }, "a\nb")).toBe("- a\nb #t");
 	});

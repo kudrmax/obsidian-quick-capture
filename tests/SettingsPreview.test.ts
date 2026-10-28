@@ -10,10 +10,12 @@ const DEFAULTS: EntryFormat = {
 	textSuffix: "",
 	audioPrefix: "- {{date}} ",
 	audioSuffix: " #transcribe",
+	answerPrefix: "\t- **{{question}}** ",
+	answerSuffix: "",
 };
 
-function mode(target: CaptureMode["target"], overrides = NO_OVERRIDES): CaptureMode {
-	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [] };
+function mode(target: CaptureMode["target"], overrides = NO_OVERRIDES, questions: CaptureMode["questions"] = []): CaptureMode {
+	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [], questions };
 }
 
 const file = (alias: string, path: string) => ({ id: path, alias, path, lastUsedAt: 0 });
@@ -24,7 +26,13 @@ describe("previewEntries", () => {
 			heading: "## Journal",
 			text: "- 21:37 Your text",
 			audio: "- 2026-09-30 ![[Recording.m4a]] #transcribe",
+			answers: [],
 		});
+	});
+
+	it("shows a questions entry with a text answer and a voice answer for the last question", () => {
+		const preview = previewEntries(resolveFormat(DEFAULTS, NO_OVERRIDES), true, clock, "#like", ["Как встал?", "Что делал?"]);
+		expect(preview.answers).toEqual(["- 21:37 #like", "\t- **Как встал?** Your text", "\t- **Что делал?** ![[Recording.m4a]]"]);
 	});
 
 	it("links audio without embedding and has no heading line when entries go to the end of the note", () => {
@@ -69,6 +77,17 @@ describe("modeSummary", () => {
 		const overrides = { ...NO_OVERRIDES, headingLevel: "none" as const };
 		expect(modeSummary(mode({ type: "daily", daysBack: 0 }, overrides), DEFAULTS)).toBe("Daily note · end of note");
 		expect(modeSummary(mode({ type: "daily", daysBack: 0 }), { ...DEFAULTS, heading: "" })).toBe("Daily note · end of note");
+	});
+
+	it("counts the questions a mode asks", () => {
+		const questions = [
+			{ text: "Как встал?", required: true },
+			{ text: " ", required: false },
+		];
+		expect(modeSummary(mode({ type: "daily", daysBack: 0 }, NO_OVERRIDES, questions), DEFAULTS)).toBe("Daily note · under “Journal” · 1 question");
+		expect(modeSummary(mode({ type: "daily", daysBack: 0 }, NO_OVERRIDES, [...questions, questions[0]]), DEFAULTS)).toBe(
+			"Daily note · under “Journal” · 2 questions",
+		);
 	});
 
 	it("uses the mode's own heading over the default", () => {

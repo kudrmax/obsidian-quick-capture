@@ -36,6 +36,8 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
 		textSuffix: "",
 		audioPrefix: "- {{time}} ",
 		audioSuffix: "",
+		answerPrefix: "\t- **{{question}}** ",
+		answerSuffix: "",
 	},
 	embedAudio: true,
 	afterSend: "close",
@@ -58,7 +60,7 @@ export function loadSettings(saved: unknown): CaptureSettings {
 	return structuredClone(settings);
 }
 
-type ModeChoices = "afterSend" | "audioLink";
+type ModeChoices = "afterSend" | "audioLink" | "questions";
 type SavedMode = Omit<CaptureMode, ModeChoices> & Partial<Pick<CaptureMode, ModeChoices>>;
 type SavedTarget = ModeTarget | { type: "daily"; daysBack?: unknown };
 type MultiFileMode = Omit<SavedMode, "target"> & { target: SavedTarget };
@@ -74,9 +76,13 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 	const { lastModeId, modes, ...rest } = { ...DEFAULT_SETTINGS, ...saved } as SavedSettings;
 	return {
 		...rest,
+		defaults: { ...DEFAULT_SETTINGS.defaults, ...rest.defaults },
 		dayEndsAt: isDayEnd(rest.dayEndsAt) ? rest.dayEndsAt : DEFAULT_DAY_END,
 		tagGroups: rest.tagGroups.map((group) => ({ ...group, closeOnPick: group.closeOnPick === true })),
-		modes: modes.map((mode) => ({ afterSend: "default", audioLink: "default", ...toFilesMode(mode) })),
+		modes: modes.map((mode) => {
+			const filesMode = toFilesMode(mode);
+			return { afterSend: "default", audioLink: "default", questions: [], ...filesMode, overrides: { ...NO_OVERRIDES, ...filesMode.overrides } };
+		}),
 		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
 	};
 }
@@ -121,5 +127,5 @@ function pickFormat(legacy: Partial<LegacySettings>): Partial<EntryFormat> {
 }
 
 function dailyMode(tagGroupIds: string[]): CaptureMode {
-	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds };
+	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds, questions: [] };
 }

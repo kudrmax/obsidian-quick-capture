@@ -14,6 +14,7 @@ import {
 	resolveAfterSend,
 	resolveEmbedAudio,
 	resolveFormat,
+	askedQuestions,
 	retainTags,
 } from "../src/domain/CaptureMode";
 
@@ -24,10 +25,12 @@ const DEFAULTS: EntryFormat = {
 	textSuffix: "",
 	audioPrefix: "- {{time}} ",
 	audioSuffix: " #transcribe",
+	answerPrefix: "\t- **{{question}}** ",
+	answerSuffix: "",
 };
 
 function mode(overrides: Partial<CaptureMode> = {}): CaptureMode {
-	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], ...overrides };
+	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], ...overrides };
 }
 
 describe("resolveFormat", () => {
@@ -36,6 +39,14 @@ describe("resolveFormat", () => {
 			heading: { text: "Дневник", level: 2 },
 			text: { prefix: "- {{time}} ", suffix: "" },
 			audio: { prefix: "- {{time}} ", suffix: " #transcribe" },
+			answer: { prefix: "\t- **{{question}}** ", suffix: "" },
+		});
+	});
+
+	it("uses the mode's own answer format", () => {
+		expect(resolveFormat(DEFAULTS, { ...NO_OVERRIDES, answerPrefix: "  - {{question}}: " }).answer).toEqual({
+			prefix: "  - {{question}}: ",
+			suffix: "",
 		});
 	});
 
@@ -60,6 +71,17 @@ describe("resolveFormat", () => {
 
 	it("lets hashes in the heading text set the level", () => {
 		expect(resolveFormat({ ...DEFAULTS, heading: "### Дневник" }, NO_OVERRIDES).heading).toEqual({ text: "Дневник", level: 3 });
+	});
+});
+
+describe("askedQuestions", () => {
+	it("keeps questions with text in their order", () => {
+		const questions = [
+			{ text: "Как встал?", required: true },
+			{ text: " ", required: true },
+			{ text: "Что тянуло встать?", required: false },
+		];
+		expect(askedQuestions(mode({ questions }))).toEqual([questions[0], questions[2]]);
 	});
 });
 

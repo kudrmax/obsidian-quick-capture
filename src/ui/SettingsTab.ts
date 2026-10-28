@@ -3,6 +3,7 @@ import {
 	AfterSend,
 	AfterSendChoice,
 	AudioLinkChoice,
+	askedQuestions,
 	CaptureMode,
 	EntryFormat,
 	HeadingLevelChoice,
@@ -30,7 +31,7 @@ export interface SettingsHost extends Plugin {
 	saveSettings(): Promise<void>;
 }
 
-type TextFormatKey = "heading" | "textPrefix" | "textSuffix" | "audioPrefix" | "audioSuffix";
+type TextFormatKey = "heading" | "textPrefix" | "textSuffix" | "audioPrefix" | "audioSuffix" | "answerPrefix" | "answerSuffix";
 type FormatTexts = Record<TextFormatKey, string>;
 
 interface FormatFieldsOptions {
@@ -40,11 +41,12 @@ interface FormatFieldsOptions {
 	setLevel(value: string): void;
 	hint: string;
 	preview(): EntryPreview;
+	showsAnswers(): boolean;
 }
 
 const LEVELS = [1, 2, 3, 4, 5, 6];
 const LEVEL_OPTIONS = LEVELS.map((level): [string, string] => [String(level), `H${level}`]);
-const PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · spaces at the edges are kept";
+const PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · {{question}} → the question · spaces at the edges are kept";
 const HEADING_HINT = "Entries go to the end of the heading's section. A missing heading is created at the end of the note. No heading: end of the note.";
 const DEFAULTS_KEY = "defaults";
 const AFTER_SEND_OPTIONS: Record<AfterSend, string> = {
@@ -98,6 +100,7 @@ export class SettingsTab extends PluginSettingTab {
 				afterSend: "default",
 				audioLink: "default",
 				tagGroupIds: [],
+				questions: [],
 			};
 			this.settings.modes.push(mode);
 			this.openCard = modeKey(mode);
@@ -121,6 +124,7 @@ export class SettingsTab extends PluginSettingTab {
 		hint(body, isDaily ? "Title of the capture screen." : "Name of this group of files. Shown only here.");
 
 		const refreshTarget = this.targetFields(body, mode);
+		this.questionFields(body, mode);
 		const refreshFormat = this.formatFields(body, mode.overrides, {
 			placeholder: (key) => this.settings.defaults[key] || (key === "heading" ? "No heading" : "empty"),
 			levels: [["default", `Default (H${this.settings.defaults.headingLevel})`], ...LEVEL_OPTIONS, ["none", "No heading"]],
@@ -133,7 +137,9 @@ export class SettingsTab extends PluginSettingTab {
 					resolveEmbedAudio(this.settings.embedAudio, mode),
 					systemClock,
 					this.sampleTag(mode),
+					askedQuestions(mode).map((question) => question.text.trim()),
 				),
+			showsAnswers: () => askedQuestions(mode).length > 0,
 		});
 		this.modeChoices(body, mode);
 		this.modeTagGroups(body, mode);
@@ -145,6 +151,49 @@ export class SettingsTab extends PluginSettingTab {
 			refreshTarget();
 			refreshFormat();
 		});
+	}
+
+	private questionFields(body: HTMLElement, mode: CaptureMode): void {
+		label(body, "Questions");
+		mode.questions.forEach((question, index) => {
+			const row = line(body);
+			new TextComponent(row)
+				.setPlaceholder("How did you sleep?")
+				.setValue(question.text)
+				.onChange((value) => {
+					question.text = value;
+					return this.changed();
+				});
+			const required = row.createEl("button", { cls: "dqc-chip", text: "Required" });
+			required.toggleClass("is-active", question.required);
+			required.setAttribute("aria-pressed", String(question.required));
+			required.addEventListener("click", async () => {
+				question.required = !question.required;
+				required.toggleClass("is-active", question.required);
+				required.setAttribute("aria-pressed", String(question.required));
+				await this.changed();
+			});
+			const move = (step: -1 | 1) => async () => {
+				moveItem(mode.questions, index, step);
+				await this.saveAndRedraw();
+			};
+			iconButton(row, "arrow-up", "Move up", move(-1), index === 0);
+			iconButton(row, "arrow-down", "Move down", move(1), index === mode.questions.length - 1);
+			iconButton(row, "x", "Remove question", async () => {
+				mode.questions.splice(index, 1);
+				await this.saveAndRedraw();
+			});
+		});
+		this.addLink(body, "Add question", async () => {
+			mode.questions.push({ text: "", required: false });
+			await this.saveAndRedraw();
+		});
+		hint(
+			body,
+			mode.questions.length === 0
+				? "Without questions an entry is free text."
+				: "Each question gets its own field on the capture screen. All answers go to the note as one entry. An empty answer is left out.",
+		);
 	}
 
 	private targetFields(body: HTMLElement, mode: CaptureMode): () => void {
@@ -303,6 +352,7 @@ export class SettingsTab extends PluginSettingTab {
 			const row = namedLine(body, name);
 			text(row, prefix);
 			text(row, suffix);
+			return row;
 		};
 
 		label(body, "Format");
@@ -320,12 +370,14 @@ export class SettingsTab extends PluginSettingTab {
 		columns.createSpan({ text: "Suffix" });
 		pair("Text", "textPrefix", "textSuffix");
 		pair("Audio", "audioPrefix", "audioSuffix");
+		const answerRow = pair("Answer", "answerPrefix", "answerSuffix");
 		hint(body, HEADING_HINT);
 		hint(body, options.hint);
 		const preview = body.createDiv({ cls: "dqc-preview" });
 
 		return () => {
 			inputs.forEach((input, key) => input.setPlaceholder(options.placeholder(key)));
+			answerRow.toggle(options.showsAnswers());
 			renderPreview(preview, options.preview());
 		};
 	}
@@ -464,6 +516,7 @@ export class SettingsTab extends PluginSettingTab {
 			setLevel: (value) => (defaults.headingLevel = Number(value)),
 			hint: PLACEHOLDER_HINT,
 			preview: () => previewEntries(resolveFormat(defaults, NO_OVERRIDES), this.settings.embedAudio, systemClock),
+			showsAnswers: () => true,
 		});
 		this.refreshers.push(refreshFormat);
 		choice(card.bodyEl, "Audio", AUDIO_LINK_OPTIONS, this.settings.embedAudio ? "embed" : "link", async (value) => {
@@ -528,6 +581,8 @@ const DEFAULT_PLACEHOLDERS: FormatTexts = {
 	textSuffix: "empty",
 	audioPrefix: "empty",
 	audioSuffix: "empty, e.g. #transcribe",
+	answerPrefix: "empty",
+	answerSuffix: "empty",
 };
 
 function modeKey(mode: CaptureMode): string {
@@ -595,8 +650,8 @@ function iconButton(parent: HTMLElement, icon: string, tooltip: string, onClick:
 function renderPreview(el: HTMLElement, preview: EntryPreview): void {
 	el.empty();
 	if (preview.heading !== null) el.createDiv({ cls: "dqc-preview-heading", text: preview.heading });
-	el.createDiv({ text: preview.text });
-	el.createDiv({ text: preview.audio });
+	const lines = preview.answers.length > 0 ? preview.answers : [preview.text, preview.audio];
+	for (const entry of lines) el.createDiv({ text: entry });
 }
 
 function renderTagSummary(el: HTMLElement, group: TagGroup): void {
