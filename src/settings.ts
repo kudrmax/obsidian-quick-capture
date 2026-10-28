@@ -11,6 +11,7 @@ export interface TagGroup {
 	id: string;
 	name: string;
 	tags: QuickTag[];
+	closeOnPick: boolean;
 }
 
 export interface CaptureSettings {
@@ -48,7 +49,7 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
 interface LegacySettings extends Omit<EntryFormat, "headingLevel"> {
 	embedAudio: boolean;
 	afterSend: AfterSend;
-	tagGroups: Omit<TagGroup, "id">[];
+	tagGroups: Omit<TagGroup, "id" | "closeOnPick">[];
 }
 
 export function loadSettings(saved: unknown): CaptureSettings {
@@ -74,6 +75,7 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 	return {
 		...rest,
 		dayEndsAt: isDayEnd(rest.dayEndsAt) ? rest.dayEndsAt : DEFAULT_DAY_END,
+		tagGroups: rest.tagGroups.map((group) => ({ ...group, closeOnPick: group.closeOnPick === true })),
 		modes: modes.map((mode) => ({ afterSend: "default", audioLink: "default", ...toFilesMode(mode) })),
 		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
 	};
@@ -100,7 +102,7 @@ export function newId(): string {
 function migrateLegacy(legacy: Partial<LegacySettings>): CaptureSettings {
 	const format = { ...DEFAULT_SETTINGS.defaults, ...pickFormat(legacy) };
 	const heading = parseHeading(format.heading, DEFAULT_HEADING_LEVEL);
-	const tagGroups = (legacy.tagGroups ?? []).map((group, index) => ({ id: `group-${index + 1}`, ...group }));
+	const tagGroups = (legacy.tagGroups ?? []).map((group, index) => ({ id: `group-${index + 1}`, ...group, closeOnPick: false }));
 	return {
 		defaults: { ...format, heading: heading?.text ?? "", headingLevel: heading?.level ?? DEFAULT_HEADING_LEVEL },
 		embedAudio: legacy.embedAudio ?? DEFAULT_SETTINGS.embedAudio,

@@ -44,7 +44,7 @@ describe("loadSettings", () => {
 		});
 		expect(settings.embedAudio).toBe(false);
 		expect(settings.afterSend).toBe("stay");
-		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0] }]);
+		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0], closeOnPick: false }]);
 		expect(settings.modes).toEqual([
 			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"] },
 		]);
@@ -144,9 +144,18 @@ describe("loadSettings", () => {
 		expect(loadSettings({ ...saved, dayEndsAt: "nonsense" }).dayEndsAt).toBe("05:00");
 	});
 
+	it("keeps the tag panel open after a pick unless a group says otherwise", () => {
+		const saved = loadSettings(null);
+		const groups = [
+			{ id: "a", name: "Old", tags: [] },
+			{ id: "b", name: "Closing", tags: [], closeOnPick: true },
+		];
+		expect(loadSettings({ ...saved, tagGroups: groups }).tagGroups.map((group) => group.closeOnPick)).toEqual([false, true]);
+	});
+
 		it("never shares lists between loads", () => {
 		const first = loadSettings(undefined);
-		first.tagGroups.push({ id: "x", name: "Books", tags: [] });
+		first.tagGroups.push({ id: "x", name: "Books", tags: [], closeOnPick: false });
 		first.modes[0].tagGroupIds.push("x");
 		const second = loadSettings(undefined);
 		expect(second.tagGroups).toEqual([]);

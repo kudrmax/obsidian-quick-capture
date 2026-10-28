@@ -337,7 +337,7 @@ export class SettingsTab extends PluginSettingTab {
 			.setHeading();
 		this.settings.tagGroups.forEach((group, index) => this.tagGroupCard(group, index));
 		this.addButton(this.containerEl, "Add group", async () => {
-			const group: TagGroup = { id: newId(), name: "", tags: [{ tag: "", icon: "" }] };
+			const group: TagGroup = { id: newId(), name: "", tags: [{ tag: "", icon: "" }], closeOnPick: false };
 			this.settings.tagGroups.push(group);
 			this.openCard = groupKey(group);
 			await this.saveAndRedraw();
@@ -364,6 +364,11 @@ export class SettingsTab extends PluginSettingTab {
 			await this.saveAndRedraw();
 		});
 		const usage = hint(body, "");
+
+		choice(body, "After picking a tag", AFTER_PICK_OPTIONS, group.closeOnPick ? "close" : "keep", (value) => {
+			group.closeOnPick = value === "close";
+			return this.changed();
+		});
 
 		const footer = body.createDiv({ cls: "dqc-card-footer" });
 		footer.createDiv({ cls: "dqc-spacer" });
@@ -514,6 +519,8 @@ export class SettingsTab extends PluginSettingTab {
 		this.containerEl.scrollTop = scrollTop;
 	}
 }
+
+const AFTER_PICK_OPTIONS = { keep: "Keep tags open", close: "Close tags" };
 
 const DEFAULT_PLACEHOLDERS: FormatTexts = {
 	heading: "No heading, e.g. Journal",
