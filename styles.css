@@ -152,7 +152,7 @@
 }
 
 .dqc-screen.has-questions {
-	--dqc-field-gap: 24px;
+	--dqc-field-gap: 8px;
 }
 
 .dqc-screen.has-questions .dqc-title {
