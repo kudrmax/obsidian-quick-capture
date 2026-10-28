@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { CaptureError, CaptureService, TargetError } from "../src/application/CaptureService";
+import { Answer, CaptureError, CaptureService, TargetError } from "../src/application/CaptureService";
 import { AttachmentStore, NoteTargets, NoteWriter } from "../src/application/ports";
-import { CaptureMode, Destination, EntryFormat, NO_OVERRIDES, NoteTarget } from "../src/domain/CaptureMode";
+import { CaptureMode, DEFAULT_QUESTION_FORMAT, Destination, EntryFormat, NO_OVERRIDES, NoteTarget } from "../src/domain/CaptureMode";
 import { CaptureSettings, DEFAULT_SETTINGS } from "../src/settings";
 
 const NOTE = "Daily/2026-09-29.md";
@@ -41,14 +41,29 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [] };
+const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT };
 const BOOKS_MODE: CaptureMode = {
 	id: "books",
 	title: "Книги",
 	target: { type: "files", files: [{ id: "book", alias: "Book", path: "Books/Book.md", lastUsedAt: 0 }] },
 	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " }, afterSend: "default", audioLink: "default",
 	tagGroupIds: [],
+	questions: [],
+	headLine: true,
+	questionFormat: DEFAULT_QUESTION_FORMAT,
 };
+const MORNING_MODE: CaptureMode = {
+	...DAILY_MODE,
+	id: "morning",
+	overrides: { ...NO_OVERRIDES, heading: "Утро" },
+	questions: [
+		{ text: "Как встал?", required: true },
+		{ text: " ", required: true },
+		{ text: "Что тянуло встать?", required: false },
+		{ text: "Что делал утром?", required: false },
+	],
+};
+const MORNING: Destination = { id: "morning", mode: MORNING_MODE, title: "Утро", target: { type: "daily", daysBack: 0 } };
 const DAILY: Destination = { id: "daily", mode: DAILY_MODE, title: "29 September 2026", target: { type: "daily", daysBack: 0 } };
 const BOOK: Destination = { id: "book", mode: BOOKS_MODE, title: "Book", target: { type: "file", path: "Books/Book.md" } };
 
@@ -214,5 +229,75 @@ describe("CaptureService", () => {
 		await expect(service.captureText(noFile, "milk")).rejects.toThrow('Choose a file for "Book"');
 		expect(attachments.saved).toEqual([]);
 		expect(notes.files.size).toBe(0);
+	});
+});
+
+describe("CaptureService.captureAnswers", () => {
+	const text = (value: string): Answer => ({ kind: "text", text: value });
+	const voice: Answer = { kind: "audio", recording: audio };
+	const morning = (mode: Partial<CaptureMode>): Destination => ({ ...MORNING, mode: { ...MORNING_MODE, ...mode } });
+
+	it("writes a line and nests a line per answered question under it", async () => {
+		const { notes, service } = setup();
+		await service.captureAnswers(MORNING, [text("Тяжело, откладывал минут 40"), text("Ничего"), text("Бассейн  \n")], ["#утро"]);
+		expect(notes.files.get(NOTE)).toBe(
+			[
+				"## Утро",
+				"",
+				"- 21:37 #утро",
+				"\t- **Как встал?** Тяжело, откладывал минут 40",
+				"\t- **Что тянуло встать?** Ничего",
+				"\t- **Что делал утром?** Бассейн",
+			].join("\n"),
+		);
+	});
+
+	it("writes only the answers when the line is hidden, with tags on the first one", async () => {
+		const { notes, service } = setup();
+		await service.captureAnswers(morning({ headLine: false }), [text("Тяжело"), text(""), text("Бассейн")], ["#утро"]);
+		expect(notes.files.get(NOTE)).toBe("## Утро\n\n- **Как встал?** Тяжело #утро\n- **Что делал утром?** Бассейн");
+	});
+
+	it("leaves out unanswered optional questions", async () => {
+		const { notes, service } = setup();
+		await service.captureAnswers(MORNING, [text("Тяжело"), text("  "), text("Бассейн")]);
+		expect(notes.files.get(NOTE)).toBe("## Утро\n\n- 21:37\n\t- **Как встал?** Тяжело\n\t- **Что делал утром?** Бассейн");
+	});
+
+	it("saves a voice answer next to the note and writes it with the voice format", async () => {
+		const { notes, attachments, service } = setup();
+		const questionFormat = { ...DEFAULT_QUESTION_FORMAT, voice: { prefix: "- {{question}} 🎙 ", suffix: " #transcribe" } };
+		await service.captureAnswers(morning({ questionFormat }), [text("Тяжело"), text(""), voice]);
+		expect(attachments.saved).toEqual(["Files/Recording 20260929213705 3.m4a"]);
+		expect(notes.files.get(NOTE)).toBe(
+			"## Утро\n\n- 21:37\n\t- **Как встал?** Тяжело\n\t- Что делал утром? 🎙 ![[Recording 20260929213705 3.m4a]] #transcribe",
+		);
+	});
+
+	it("links a voice answer the way the mode asks and uses the mode's line", async () => {
+		const { notes, service } = setup();
+		const questionFormat = { ...DEFAULT_QUESTION_FORMAT, line: { prefix: "- [[{{date}}]]", suffix: "" } };
+		await service.captureAnswers(morning({ audioLink: "link", questionFormat }), [voice]);
+		expect(notes.files.get(NOTE)).toBe("## Утро\n\n- [[2026-09-29]]\n\t- **Как встал?** [[Recording 20260929213705 1.m4a]]");
+	});
+
+	it("refuses answers that leave a required question empty", async () => {
+		const { notes, service } = setup();
+		await expect(service.captureAnswers(MORNING, [text(""), text("Ничего")])).rejects.toThrow('Answer "Как встал?"');
+		expect(notes.files.size).toBe(0);
+	});
+
+	it("refuses when nothing is answered", async () => {
+		const { service } = setup();
+		const questions = [{ text: "Как встал?", required: false }];
+		await expect(service.captureAnswers(morning({ questions }), [text(" ")])).rejects.toBeInstanceOf(CaptureError);
+	});
+
+	it("discards saved voice answers when writing the note fails", async () => {
+		const { notes, attachments, service } = setup();
+		notes.failWrites = true;
+		await expect(service.captureAnswers(MORNING, [voice, text(""), voice])).rejects.toThrow("disk full");
+		expect(attachments.saved).toHaveLength(2);
+		expect(attachments.discarded).toEqual(attachments.saved);
 	});
 });

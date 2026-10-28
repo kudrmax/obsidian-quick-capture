@@ -10,6 +10,7 @@ import {
 	listDestinations,
 	ModeFile,
 	modeTagGroups,
+	DEFAULT_QUESTION_FORMAT,
 	NO_OVERRIDES,
 	noteName,
 	resolveEmbedAudio,
@@ -17,8 +18,9 @@ import {
 } from "../domain/CaptureMode";
 import { systemClock } from "../domain/Clock";
 import { isDayEnd } from "../domain/DiaryDayClock";
+import { EntryTemplate } from "../domain/EntryFormatter";
 import { moveItem } from "../domain/ListOrder";
-import { EntryPreview, modeSummary, previewEntries } from "../domain/SettingsPreview";
+import { EntryPreview, modeSummary, previewAnswers, previewEntries } from "../domain/SettingsPreview";
 import { CaptureSettings, newId, QuickTag, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
 import { IconPicker } from "./IconPicker";
@@ -39,7 +41,13 @@ interface FormatFieldsOptions {
 	level: string;
 	setLevel(value: string): void;
 	hint: string;
-	preview(): EntryPreview;
+	preview(): PreviewLines;
+	questionsOf?: CaptureMode;
+}
+
+interface PreviewLines {
+	heading: string | null;
+	lines: string[];
 }
 
 const LEVELS = [1, 2, 3, 4, 5, 6];
@@ -56,6 +64,7 @@ const AUDIO_LINK_OPTIONS: Record<Exclude<AudioLinkChoice, "default">, string> = 
 	embed: "Embed: ![[Recording.m4a]]",
 	link: "Link: [[Recording.m4a]]",
 };
+const QUESTION_PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · {{question}} → the question · spaces at the edges are kept";
 const AUDIO_LINK_HINT = "An embed shows a player in the note, a link stays plain text.";
 
 export class SettingsTab extends PluginSettingTab {
@@ -98,6 +107,9 @@ export class SettingsTab extends PluginSettingTab {
 				afterSend: "default",
 				audioLink: "default",
 				tagGroupIds: [],
+				questions: [],
+				headLine: true,
+				questionFormat: structuredClone(DEFAULT_QUESTION_FORMAT),
 			};
 			this.settings.modes.push(mode);
 			this.openCard = modeKey(mode);
@@ -121,19 +133,22 @@ export class SettingsTab extends PluginSettingTab {
 		hint(body, isDaily ? "Title of the capture screen." : "Name of this group of files. Shown only here.");
 
 		const refreshTarget = this.targetFields(body, mode);
+		this.questionFields(body, mode);
+		const asksQuestions = mode.questions.length > 0;
 		const refreshFormat = this.formatFields(body, mode.overrides, {
 			placeholder: (key) => this.settings.defaults[key] || (key === "heading" ? "No heading" : "empty"),
 			levels: [["default", `Default (H${this.settings.defaults.headingLevel})`], ...LEVEL_OPTIONS, ["none", "No heading"]],
 			level: String(mode.overrides.headingLevel),
 			setLevel: (value) => (mode.overrides.headingLevel = parseLevelChoice(value)),
-			hint: `${PLACEHOLDER_HINT} · an empty field uses the default`,
-			preview: () =>
-				previewEntries(
-					resolveFormat(this.settings.defaults, mode.overrides),
-					resolveEmbedAudio(this.settings.embedAudio, mode),
-					systemClock,
-					this.sampleTag(mode),
-				),
+			hint: asksQuestions ? QUESTION_PLACEHOLDER_HINT : `${PLACEHOLDER_HINT} · an empty field uses the default`,
+			preview: () => {
+				const embed = resolveEmbedAudio(this.settings.embedAudio, mode);
+				const entries = previewEntries(resolveFormat(this.settings.defaults, mode.overrides), embed, systemClock, this.sampleTag(mode));
+				return asksQuestions
+					? { heading: entries.heading, lines: previewAnswers(mode, embed, systemClock, this.sampleTag(mode)) }
+					: previewLines(entries);
+			},
+			questionsOf: asksQuestions ? mode : undefined,
 		});
 		this.modeChoices(body, mode);
 		this.modeTagGroups(body, mode);
@@ -318,16 +333,97 @@ export class SettingsTab extends PluginSettingTab {
 		columns.addClass("dqc-line-header");
 		columns.createSpan({ text: "Prefix" });
 		columns.createSpan({ text: "Suffix" });
-		pair("Text", "textPrefix", "textSuffix");
-		pair("Audio", "audioPrefix", "audioSuffix");
+		const refreshRows = options.questionsOf ? this.questionFormatRows(body, options.questionsOf) : null;
+		if (!options.questionsOf) {
+			pair("Text", "textPrefix", "textSuffix");
+			pair("Audio", "audioPrefix", "audioSuffix");
+		}
 		hint(body, HEADING_HINT);
 		hint(body, options.hint);
 		const preview = body.createDiv({ cls: "dqc-preview" });
 
 		return () => {
 			inputs.forEach((input, key) => input.setPlaceholder(options.placeholder(key)));
+			refreshRows?.();
 			renderPreview(preview, options.preview());
 		};
+	}
+
+	private questionFormatRows(body: HTMLElement, mode: CaptureMode): () => void {
+		const format = mode.questionFormat;
+		const row = (name: string, template: EntryTemplate) => {
+			const parent = namedLine(body, name);
+			for (const part of ["prefix", "suffix"] as const) {
+				new TextComponent(parent)
+					.setPlaceholder("empty")
+					.setValue(template[part])
+					.onChange((value) => {
+						template[part] = value;
+						return this.changed();
+					});
+			}
+			return parent;
+		};
+		const lineRow = row("Line", format.line);
+		row("Text", format.text);
+		row("Voice", format.voice);
+		return () => lineRow.toggle(mode.headLine);
+	}
+
+	private questionFields(body: HTMLElement, mode: CaptureMode): void {
+		label(body, "Questions");
+		mode.questions.forEach((question, index) => {
+			const row = line(body);
+			new TextComponent(row)
+				.setPlaceholder("How did you sleep?")
+				.setValue(question.text)
+				.onChange((value) => {
+					question.text = value;
+					return this.changed();
+				});
+			const required = row.createEl("button", { cls: "dqc-chip", text: "Required" });
+			const showRequired = () => {
+				required.toggleClass("is-active", question.required);
+				required.setAttribute("aria-pressed", String(question.required));
+			};
+			showRequired();
+			required.addEventListener("click", async () => {
+				question.required = !question.required;
+				showRequired();
+				await this.changed();
+			});
+			const move = (step: -1 | 1) => async () => {
+				moveItem(mode.questions, index, step);
+				await this.saveAndRedraw();
+			};
+			iconButton(row, "arrow-up", "Move up", move(-1), index === 0);
+			iconButton(row, "arrow-down", "Move down", move(1), index === mode.questions.length - 1);
+			iconButton(row, "x", "Remove question", async () => {
+				mode.questions.splice(index, 1);
+				await this.saveAndRedraw();
+			});
+		});
+		this.addLink(body, "Add question", async () => {
+			mode.questions.push({ text: "", required: false });
+			await this.saveAndRedraw();
+		});
+		if (mode.questions.length === 0) {
+			hint(body, "Without questions an entry is free text. With them, each question gets its own field and all answers go to the note as one entry.");
+			return;
+		}
+		hint(body, "Each question gets its own field on the capture screen. An empty answer is left out.");
+		label(body, "Line above the answers");
+		const options = body.createDiv({ cls: "dqc-seg" });
+		for (const [shown, text] of [[true, "Show"], [false, "Hide"]] as const) {
+			const option = options.createEl("button", { text, cls: "dqc-seg-option" });
+			option.toggleClass("is-active", mode.headLine === shown);
+			option.addEventListener("click", async () => {
+				if (mode.headLine === shown) return;
+				mode.headLine = shown;
+				await this.saveAndRedraw();
+			});
+		}
+		hint(body, "Show: the answers go under a line like “- 23:35”, set in Line below. Hide: the entry is just the answers.");
 	}
 
 	private tagGroupSettings(): void {
@@ -463,7 +559,7 @@ export class SettingsTab extends PluginSettingTab {
 			level: String(defaults.headingLevel),
 			setLevel: (value) => (defaults.headingLevel = Number(value)),
 			hint: PLACEHOLDER_HINT,
-			preview: () => previewEntries(resolveFormat(defaults, NO_OVERRIDES), this.settings.embedAudio, systemClock),
+			preview: () => previewLines(previewEntries(resolveFormat(defaults, NO_OVERRIDES), this.settings.embedAudio, systemClock)),
 		});
 		this.refreshers.push(refreshFormat);
 		choice(card.bodyEl, "Audio", AUDIO_LINK_OPTIONS, this.settings.embedAudio ? "embed" : "link", async (value) => {
@@ -592,11 +688,14 @@ function iconButton(parent: HTMLElement, icon: string, tooltip: string, onClick:
 		.onClick(() => void onClick());
 }
 
-function renderPreview(el: HTMLElement, preview: EntryPreview): void {
+function previewLines(preview: EntryPreview): PreviewLines {
+	return { heading: preview.heading, lines: [preview.text, preview.audio] };
+}
+
+function renderPreview(el: HTMLElement, preview: PreviewLines): void {
 	el.empty();
 	if (preview.heading !== null) el.createDiv({ cls: "dqc-preview-heading", text: preview.heading });
-	el.createDiv({ text: preview.text });
-	el.createDiv({ text: preview.audio });
+	for (const entry of preview.lines) el.createDiv({ text: entry });
 }
 
 function renderTagSummary(el: HTMLElement, group: TagGroup): void {

@@ -4,6 +4,7 @@ import { AudioRecording } from "../application/ports";
 import { AudioPlayer, playbackProgress } from "../infrastructure/HtmlAudioPlayer";
 import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import {
+	askedQuestions,
 	Destination,
 	listDestinations,
 	modeTagGroups,
@@ -14,6 +15,7 @@ import {
 import { highlightSegments } from "../domain/Highlight";
 import { CaptureSettings } from "../settings";
 import { ModePicker } from "./ModePicker";
+import { Editor, QuestionFields } from "./QuestionFields";
 import { SampleTicker } from "./SampleTicker";
 import { hasQuickTags, TagPicker } from "./TagPicker";
 import { Waveform } from "./Waveform";
@@ -55,8 +57,11 @@ const SWIPE_DISTANCE_PX = 60;
 export class CaptureScreen {
 	private state: State = "input";
 	private readonly root: HTMLElement;
-	private readonly textarea: HTMLTextAreaElement;
-	private readonly highlightEl: HTMLElement;
+	private textarea: HTMLTextAreaElement;
+	private highlightEl: HTMLElement;
+	private readonly freeEditor: Editor;
+	private readonly questionFields: QuestionFields;
+	private readonly recordingQuestionEl: HTMLElement;
 	private readonly titleEl: HTMLElement;
 	private readonly statusEl: HTMLElement;
 	private readonly timerEl: HTMLElement;
@@ -93,7 +98,7 @@ export class CaptureScreen {
 
 		const body = this.root.createDiv({ cls: "dqc-body" });
 		body.addEventListener("click", (event) => {
-			if (this.state === "input" && event.target !== this.textarea) this.textarea.focus();
+			if (this.state === "input" && !this.questionFields.hasQuestions() && event.target !== this.textarea) this.textarea.focus();
 		});
 		this.titleEl = body.createDiv({ cls: "dqc-title" });
 		this.titleEl.addEventListener("click", (event) => {
@@ -110,8 +115,21 @@ export class CaptureScreen {
 		});
 		this.textarea.addEventListener("scroll", () => (this.highlightEl.scrollTop = this.textarea.scrollTop));
 		options.decorateTextInput(this.textarea, () => this.destination());
+		this.freeEditor = { textarea: this.textarea, highlight: this.highlightEl };
+		this.questionFields = new QuestionFields(body, {
+			decorate: (textarea) => options.decorateTextInput(textarea, () => this.destination()),
+			onFocus: (editor) => {
+				this.useEditor(editor);
+				this.renderControls();
+			},
+			onInput: () => {
+				this.renderText();
+				this.renderControls();
+			},
+		});
 
 		const recorderView = body.createDiv({ cls: "dqc-recorder" });
+		this.recordingQuestionEl = recorderView.createDiv({ cls: "dqc-question" });
 		this.statusEl = recorderView.createDiv({ cls: "dqc-status" });
 		this.timerEl = recorderView.createDiv({ cls: "dqc-timer", text: "00:00" });
 		this.waveform = new Waveform(recorderView.createEl("canvas", { cls: "dqc-wave" }));
@@ -139,6 +157,7 @@ export class CaptureScreen {
 			() => this.renderTitle(),
 		);
 		this.confirmEl = this.root.createDiv({ cls: "dqc-confirm" });
+		this.showQuestions();
 		this.render();
 	}
 
@@ -147,7 +166,7 @@ export class CaptureScreen {
 	}
 
 	submit(): void {
-		const canSendText = this.state === "input" && this.textarea.value.trim() !== "";
+		const canSendText = this.state === "input" && (this.questionFields.hasQuestions() ? this.questionFields.canSend() : this.textarea.value.trim() !== "");
 		if (canSendText || this.state === "stopped") void this.send();
 	}
 
@@ -198,7 +217,37 @@ export class CaptureScreen {
 		const destination = pickDestination(this.destinations(), id);
 		if (!destination) return;
 		this.moveTo(destination);
-		this.renderTitle();
+		this.showQuestions();
+		this.render();
+	}
+
+	private showQuestions(): void {
+		const editors = this.questionFields.show(askedQuestions(this.destination().mode));
+		this.root.toggleClass("has-questions", editors.length > 0);
+		for (const editor of editors) {
+			this.useEditor(editor);
+			this.renderText();
+		}
+		this.useEditor(this.questionFields.currentEditor() ?? this.freeEditor);
+	}
+
+	private useEditor(editor: Editor): void {
+		this.textarea = editor.textarea;
+		this.highlightEl = editor.highlight;
+	}
+
+	private async keepVoiceAnswer(): Promise<void> {
+		const recording = await this.requirePendingRecording();
+		this.questionFields.keepVoiceAnswer(recording, clockText(this.stoppedElapsedMs));
+		this.player.release();
+		this.pendingRecording = null;
+		this.stoppedElapsedMs = 0;
+		this.waveform.clear();
+		this.setState("input");
+	}
+
+	private removeVoiceAnswer(): void {
+		this.questionFields.removeVoiceAnswer();
 		this.renderControls();
 	}
 
@@ -295,11 +344,18 @@ export class CaptureScreen {
 		this.setState("sending");
 		let captured: CapturedEntry;
 		try {
-			captured = this.sendingAudio
+			captured = this.questionFields.hasQuestions()
+				? await this.options.service.captureAnswers(destination, this.questionFields.answers(), tags)
+				: this.sendingAudio
 				? await this.options.service.captureAudio(destination, await this.requirePendingRecording(), tags)
 				: await this.options.service.captureText(destination, this.textarea.value, tags);
 		} catch (error) {
 			if (error instanceof TargetError) {
+				new Notice(error.message);
+				this.setState(previous);
+				return;
+			}
+			if (this.questionFields.hasQuestions() && error instanceof CaptureError) {
 				new Notice(error.message);
 				this.setState(previous);
 				return;
@@ -327,7 +383,8 @@ export class CaptureScreen {
 		this.player.release();
 		this.pendingRecording = null;
 		this.selectedTags.clear();
-		this.textarea.value = "";
+		this.freeEditor.textarea.value = "";
+		this.showQuestions();
 		this.stoppedElapsedMs = 0;
 		this.waveform.clear();
 		this.state = "input";
@@ -452,8 +509,10 @@ export class CaptureScreen {
 		this.root.dataset.state = this.state;
 		this.root.dataset.mode = this.isAudioMode() ? "audio" : "text";
 		this.root.toggleClass("is-playing", this.isPlaying());
-		this.textarea.readOnly = this.state === "sending";
+		this.freeEditor.textarea.readOnly = this.state === "sending";
+		this.questionFields.setReadOnly(this.state === "sending");
 		this.renderTitle();
+		this.recordingQuestionEl.setText(this.questionFields.currentQuestion());
 		if (!this.isAudioMode()) this.renderText();
 		this.statusEl.setText(
 			{
@@ -488,10 +547,7 @@ export class CaptureScreen {
 	}
 
 	private renderTimer(): void {
-		const totalSeconds = Math.floor(this.currentElapsedMs() / 1000);
-		const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-		const seconds = String(totalSeconds % 60).padStart(2, "0");
-		this.timerEl.setText(`${minutes}:${seconds}`);
+		this.timerEl.setText(clockText(this.currentElapsedMs()));
 	}
 
 	private renderControls(): void {
@@ -553,6 +609,7 @@ export class CaptureScreen {
 	private controlsForState(): [ControlSpec | null, ControlSpec] {
 		switch (this.state) {
 			case "input":
+				if (this.questionFields.hasQuestions()) return this.answerControls();
 				return this.textarea.value.trim().length > 0
 					? [null, { icon: "arrow-up", label: "Send", tone: "primary", onClick: () => void this.send() }]
 					: [
@@ -582,11 +639,27 @@ export class CaptureScreen {
 			case "stopped":
 				return [
 					{ icon: "trash-2", label: "Discard", tone: "secondary", onClick: () => this.discard() },
-					{ icon: "arrow-up", label: "Send", tone: "primary", onClick: () => void this.send() },
+					this.questionFields.hasQuestions()
+						? { icon: "check", label: "Use as answer", tone: "primary", onClick: () => void this.keepVoiceAnswer() }
+						: { icon: "arrow-up", label: "Send", tone: "primary", onClick: () => void this.send() },
 				];
 			case "sending":
 				return [null, { icon: "loader", label: "Sending", tone: "primary", onClick: () => {}, disabled: true }];
 		}
+	}
+
+	private answerControls(): [ControlSpec, ControlSpec] {
+		const voice: ControlSpec = this.questionFields.hasVoiceAnswer()
+			? { icon: "trash-2", label: "Remove voice answer", tone: "secondary", onClick: () => this.removeVoiceAnswer() }
+			: { icon: "mic", label: "Answer by voice", tone: "secondary", onClick: () => void this.startRecording() };
+		const send: ControlSpec = {
+			icon: "arrow-up",
+			label: "Send",
+			tone: "primary",
+			onClick: () => void this.send(),
+			disabled: !this.questionFields.canSend(),
+		};
+		return [voice, send];
 	}
 
 	private renderControl(slot: HTMLElement, spec: ControlSpec | null): void {
@@ -623,6 +696,13 @@ export class CaptureScreen {
 		};
 		this.confirmEl.addClass("is-open");
 	}
+}
+
+function clockText(ms: number): string {
+	const totalSeconds = Math.floor(ms / 1000);
+	const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+	const seconds = String(totalSeconds % 60).padStart(2, "0");
+	return `${minutes}:${seconds}`;
 }
 
 function nextFrame(): Promise<void> {

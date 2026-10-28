@@ -151,6 +151,71 @@
 	text-decoration-line: var(--link-decoration);
 }
 
+.dqc-screen.has-questions .dqc-body > .dqc-editor {
+	display: none;
+}
+
+.dqc-fields {
+	flex: 0 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+
+.dqc-fields::-webkit-scrollbar {
+	display: none;
+}
+
+.dqc-fields:empty,
+.dqc-screen[data-mode="audio"] .dqc-fields {
+	display: none;
+}
+
+.dqc-question {
+	margin-bottom: 6px;
+	text-align: center;
+	color: var(--text-faint);
+	font-size: var(--font-ui-medium);
+	line-height: 1.4;
+	transition: color 120ms ease;
+}
+
+.dqc-question:empty {
+	display: none;
+}
+
+.dqc-field.is-current .dqc-question,
+.dqc-recorder .dqc-question {
+	color: var(--text-muted);
+}
+
+.dqc-voice {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	font-size: 1.25em;
+	line-height: 1.5;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.dqc-voice svg {
+	width: 0.9em;
+	height: 0.9em;
+}
+
+.dqc-field.has-voice .dqc-editor {
+	display: none;
+}
+
+.dqc-field.has-voice .dqc-voice {
+	display: flex;
+}
+
 .dqc-recorder {
 	flex: 0 0 auto;
 	margin-top: 20px;

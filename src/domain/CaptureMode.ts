@@ -39,6 +39,23 @@ export interface ModeFile {
 
 export type ModeTarget = { type: "daily"; daysBack: number } | { type: "files"; files: ModeFile[] };
 
+export interface Question {
+	text: string;
+	required: boolean;
+}
+
+export interface QuestionFormat {
+	line: EntryTemplate;
+	text: EntryTemplate;
+	voice: EntryTemplate;
+}
+
+export const DEFAULT_QUESTION_FORMAT: QuestionFormat = {
+	line: { prefix: "- {{time}}", suffix: "" },
+	text: { prefix: "- **{{question}}** ", suffix: "" },
+	voice: { prefix: "- **{{question}}** ", suffix: "" },
+};
+
 export interface CaptureMode {
 	id: string;
 	title: string;
@@ -47,6 +64,9 @@ export interface CaptureMode {
 	afterSend: AfterSendChoice;
 	audioLink: AudioLinkChoice;
 	tagGroupIds: string[];
+	questions: Question[];
+	headLine: boolean;
+	questionFormat: QuestionFormat;
 }
 
 export interface Destination {
@@ -94,6 +114,10 @@ export function resolveAfterSend(defaultChoice: AfterSend, mode: CaptureMode): A
 
 export function resolveEmbedAudio(defaultEmbed: boolean, mode: CaptureMode): boolean {
 	return mode.audioLink === "default" ? defaultEmbed : mode.audioLink === "embed";
+}
+
+export function askedQuestions(mode: CaptureMode): Question[] {
+	return mode.questions.filter((question) => question.text.trim() !== "");
 }
 
 export function modeTagGroups<G extends { id: string }>(groups: G[], mode: CaptureMode): G[] {

@@ -1,4 +1,5 @@
-import { CaptureMode, EntryFormat, noteName, resolveFormat, ResolvedFormat } from "./CaptureMode";
+import { AnswerEntry } from "./AnswerEntry";
+import { askedQuestions, CaptureMode, EntryFormat, noteName, resolveFormat, ResolvedFormat } from "./CaptureMode";
 import { Clock } from "./Clock";
 import { EntryFormatter } from "./EntryFormatter";
 
@@ -21,9 +22,22 @@ export function previewEntries(format: ResolvedFormat, embedAudio: boolean, cloc
 	};
 }
 
+export function previewAnswers(mode: CaptureMode, embedAudio: boolean, clock: Clock, sampleTag = ""): string[] {
+	const questions = askedQuestions(mode);
+	const answers = questions.map((question, index) => {
+		const voice = index === questions.length - 1 && questions.length > 1;
+		const content = voice ? `${embedAudio ? "!" : ""}${SAMPLE_RECORDING}` : SAMPLE_TEXT;
+		return { question: question.text.trim(), content, voice };
+	});
+	return new AnswerEntry(new EntryFormatter(clock)).lines(mode.questionFormat, mode.headLine, answers, [sampleTag]);
+}
+
 export function modeSummary(mode: CaptureMode, defaults: EntryFormat): string {
 	const heading = resolveFormat(defaults, mode.overrides).heading;
-	return `${targetSummary(mode)} · ${heading ? `under “${heading.text}”` : "end of note"}`;
+	const summary = `${targetSummary(mode)} · ${heading ? `under “${heading.text}”` : "end of note"}`;
+	const questions = askedQuestions(mode).length;
+	if (questions === 0) return summary;
+	return `${summary} · ${questions} ${questions === 1 ? "question" : "questions"}`;
 }
 
 function dailySummary(daysBack: number): string {

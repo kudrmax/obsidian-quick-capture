@@ -1,10 +1,13 @@
-import { Destination, destinationProblem, resolveEmbedAudio, resolveFormat } from "../domain/CaptureMode";
+import { askedQuestions, Destination, destinationProblem, resolveEmbedAudio, resolveFormat } from "../domain/CaptureMode";
 import { Clock } from "../domain/Clock";
-import { EntryFormatter, EntryTemplate } from "../domain/EntryFormatter";
+import { AnswerEntry, AnswerLine } from "../domain/AnswerEntry";
+import { EntryFormatter } from "../domain/EntryFormatter";
 import { partFileNames } from "../domain/RecordingParts";
 import { HeadingTarget, insertEntry } from "../domain/SectionInserter";
 import { CaptureSettings } from "../settings";
 import { AttachmentStore, AudioPart, AudioRecording, NoteTargets, NoteWriter, SavedAttachment } from "./ports";
+
+export type Answer = { kind: "text"; text: string } | { kind: "audio"; recording: AudioRecording };
 
 export class CaptureError extends Error {}
 
@@ -27,9 +30,11 @@ interface CaptureDependencies {
 
 export class CaptureService {
 	private readonly formatter: EntryFormatter;
+	private readonly answerEntry: AnswerEntry;
 
 	constructor(private readonly deps: CaptureDependencies) {
 		this.formatter = new EntryFormatter(deps.clock);
+		this.answerEntry = new AnswerEntry(this.formatter);
 	}
 
 	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<CapturedEntry> {
@@ -37,7 +42,7 @@ export class CaptureService {
 		if (content.trim() === "") throw new CaptureError("Nothing to add");
 		const notePath = await this.resolveTarget(destination);
 		const format = resolveFormat(this.deps.settings().defaults, destination.mode.overrides);
-		return this.append(notePath, format.heading, format.text, content, tags);
+		return this.append(notePath, format.heading, this.formatter.format(format.text, content, tags));
 	}
 
 	async captureAudio(destination: Destination, recording: AudioRecording, tags: readonly string[] = []): Promise<CapturedEntry> {
@@ -48,15 +53,57 @@ export class CaptureService {
 		const settings = this.deps.settings();
 		const notePath = await this.resolveTarget(destination);
 		const format = resolveFormat(settings.defaults, destination.mode.overrides);
-		const saved = await this.saveParts(parts, recording.extension, notePath);
-		const prefix = resolveEmbedAudio(settings.embedAudio, destination.mode) ? "!" : "";
-		const content = saved.map((attachment) => `${prefix}${attachment.link}`).join(" ");
+		const saved = await this.saveParts(parts, recording.extension, notePath, this.recordingBaseName());
+		const content = this.audioLinks(saved, destination);
 		try {
-			return await this.append(notePath, format.heading, format.audio, content, tags);
+			return await this.append(notePath, format.heading, this.formatter.format(format.audio, content, tags));
 		} catch (error) {
 			await this.discardAll(saved);
 			throw error;
 		}
+	}
+
+	async captureAnswers(destination: Destination, answers: readonly Answer[], tags: readonly string[] = []): Promise<CapturedEntry> {
+		const questions = askedQuestions(destination.mode);
+		const answered = questions.map((_, index) => answers[index]).map((answer) => (answer && hasContent(answer) ? answer : null));
+		const missing = questions.find((question, index) => question.required && answered[index] === null);
+		if (missing) throw new CaptureError(`Answer "${missing.text.trim()}"`);
+		if (answered.every((answer) => answer === null)) throw new CaptureError("Nothing to add");
+		const notePath = await this.resolveTarget(destination);
+		const format = resolveFormat(this.deps.settings().defaults, destination.mode.overrides);
+		const lines: AnswerLine[] = [];
+		const saved: SavedAttachment[] = [];
+		try {
+			for (const [index, answer] of answered.entries()) {
+				if (answer === null) continue;
+				const content = answer.kind === "text" ? answer.text.trim() : await this.saveVoiceAnswer(answer.recording, notePath, index, saved, destination);
+				lines.push({ question: questions[index].text.trim(), content, voice: answer.kind === "audio" });
+			}
+			const { questionFormat, headLine } = destination.mode;
+			const entry = this.answerEntry.lines(questionFormat, headLine, lines, tags).join("\n");
+			return await this.append(notePath, format.heading, entry);
+		} catch (error) {
+			await this.discardAll(saved);
+			throw error;
+		}
+	}
+
+	private async saveVoiceAnswer(
+		recording: AudioRecording,
+		notePath: string,
+		index: number,
+		saved: SavedAttachment[],
+		destination: Destination,
+	): Promise<string> {
+		const parts = recording.parts.filter((part) => part.data.byteLength > 0);
+		const attachments = await this.saveParts(parts, recording.extension, notePath, `${this.recordingBaseName()} ${index + 1}`);
+		saved.push(...attachments);
+		return this.audioLinks(attachments, destination);
+	}
+
+	private audioLinks(saved: readonly SavedAttachment[], destination: Destination): string {
+		const prefix = resolveEmbedAudio(this.deps.settings().embedAudio, destination.mode) ? "!" : "";
+		return saved.map((attachment) => `${prefix}${attachment.link}`).join(" ");
 	}
 
 	private resolveTarget(destination: Destination): Promise<string> {
@@ -65,14 +112,7 @@ export class CaptureService {
 		return this.deps.targets.resolve(destination.target);
 	}
 
-	private async append(
-		notePath: string,
-		heading: HeadingTarget | null,
-		template: EntryTemplate,
-		content: string,
-		tags: readonly string[],
-	): Promise<CapturedEntry> {
-		const entry = this.formatter.format(template, content, tags);
+	private async append(notePath: string, heading: HeadingTarget | null, entry: string): Promise<CapturedEntry> {
 		let line = 0;
 		await this.deps.notes.update(notePath, (note) => {
 			const insertion = insertEntry(note, heading, entry);
@@ -82,8 +122,8 @@ export class CaptureService {
 		return { path: notePath, line };
 	}
 
-	private async saveParts(parts: readonly AudioPart[], extension: string, notePath: string): Promise<SavedAttachment[]> {
-		const names = partFileNames(this.recordingBaseName(), extension, parts.length);
+	private async saveParts(parts: readonly AudioPart[], extension: string, notePath: string, baseName: string): Promise<SavedAttachment[]> {
+		const names = partFileNames(baseName, extension, parts.length);
 		const saved: SavedAttachment[] = [];
 		try {
 			for (const [index, part] of parts.entries()) {
@@ -106,4 +146,8 @@ export class CaptureService {
 		const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 		return `Recording ${stamp}`;
 	}
+}
+
+function hasContent(answer: Answer): boolean {
+	return answer.kind === "text" ? answer.text.trim() !== "" : answer.recording.parts.some((part) => part.data.byteLength > 0);
 }
