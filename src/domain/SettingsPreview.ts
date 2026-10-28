@@ -1,6 +1,6 @@
+import { AnswerEntry } from "./AnswerEntry";
 import { askedQuestions, CaptureMode, EntryFormat, noteName, resolveFormat, ResolvedFormat } from "./CaptureMode";
 import { Clock } from "./Clock";
-import { AnswerEntry } from "./AnswerEntry";
 import { EntryFormatter } from "./EntryFormatter";
 
 const SAMPLE_TEXT = "Your text";
@@ -10,30 +10,26 @@ export interface EntryPreview {
 	heading: string | null;
 	text: string;
 	audio: string;
-	answers: string[];
 }
 
-export function previewEntries(
-	format: ResolvedFormat,
-	embedAudio: boolean,
-	clock: Clock,
-	sampleTag = "",
-	questions: readonly string[] = [],
-	headLine = true,
-): EntryPreview {
+export function previewEntries(format: ResolvedFormat, embedAudio: boolean, clock: Clock, sampleTag = ""): EntryPreview {
 	const formatter = new EntryFormatter(clock);
 	const tags = [sampleTag];
-	const recording = `${embedAudio ? "!" : ""}${SAMPLE_RECORDING}`;
-	const answers = questions.map((question, index) => ({
-		question,
-		content: index === questions.length - 1 ? recording : SAMPLE_TEXT,
-	}));
 	return {
 		heading: format.heading ? `${"#".repeat(format.heading.level)} ${format.heading.text}` : null,
 		text: formatter.format(format.text, SAMPLE_TEXT, tags),
-		audio: formatter.format(format.audio, recording, tags),
-		answers: questions.length === 0 ? [] : new AnswerEntry(formatter).lines(format, headLine, answers, tags),
+		audio: formatter.format(format.audio, `${embedAudio ? "!" : ""}${SAMPLE_RECORDING}`, tags),
 	};
+}
+
+export function previewAnswers(mode: CaptureMode, embedAudio: boolean, clock: Clock, sampleTag = ""): string[] {
+	const questions = askedQuestions(mode);
+	const answers = questions.map((question, index) => {
+		const voice = index === questions.length - 1 && questions.length > 1;
+		const content = voice ? `${embedAudio ? "!" : ""}${SAMPLE_RECORDING}` : SAMPLE_TEXT;
+		return { question: question.text.trim(), content, voice };
+	});
+	return new AnswerEntry(new EntryFormatter(clock)).lines(mode.questionFormat, mode.headLine, answers, [sampleTag]);
 }
 
 export function modeSummary(mode: CaptureMode, defaults: EntryFormat): string {

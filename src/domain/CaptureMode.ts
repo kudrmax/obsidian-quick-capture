@@ -8,8 +8,6 @@ export interface EntryFormat {
 	textSuffix: string;
 	audioPrefix: string;
 	audioSuffix: string;
-	answerPrefix: string;
-	answerSuffix: string;
 }
 
 export type HeadingLevelChoice = "default" | "none" | number;
@@ -21,8 +19,6 @@ export interface FormatOverrides {
 	textSuffix: string;
 	audioPrefix: string;
 	audioSuffix: string;
-	answerPrefix: string;
-	answerSuffix: string;
 }
 
 export type AfterSend = "close" | "stay" | "open";
@@ -48,6 +44,18 @@ export interface Question {
 	required: boolean;
 }
 
+export interface QuestionFormat {
+	line: EntryTemplate;
+	text: EntryTemplate;
+	voice: EntryTemplate;
+}
+
+export const DEFAULT_QUESTION_FORMAT: QuestionFormat = {
+	line: { prefix: "- {{time}}", suffix: "" },
+	text: { prefix: "- **{{question}}** ", suffix: "" },
+	voice: { prefix: "- **{{question}}** ", suffix: "" },
+};
+
 export interface CaptureMode {
 	id: string;
 	title: string;
@@ -58,6 +66,7 @@ export interface CaptureMode {
 	tagGroupIds: string[];
 	questions: Question[];
 	headLine: boolean;
+	questionFormat: QuestionFormat;
 }
 
 export interface Destination {
@@ -71,7 +80,6 @@ export interface ResolvedFormat {
 	heading: HeadingTarget | null;
 	text: EntryTemplate;
 	audio: EntryTemplate;
-	answer: EntryTemplate;
 }
 
 export const NO_OVERRIDES: FormatOverrides = {
@@ -81,8 +89,6 @@ export const NO_OVERRIDES: FormatOverrides = {
 	textSuffix: "",
 	audioPrefix: "",
 	audioSuffix: "",
-	answerPrefix: "",
-	answerSuffix: "",
 };
 
 export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides): ResolvedFormat {
@@ -98,10 +104,6 @@ export function resolveFormat(defaults: EntryFormat, overrides: FormatOverrides)
 		audio: {
 			prefix: pick(overrides.audioPrefix, defaults.audioPrefix),
 			suffix: pick(overrides.audioSuffix, defaults.audioSuffix),
-		},
-		answer: {
-			prefix: pick(overrides.answerPrefix, defaults.answerPrefix),
-			suffix: pick(overrides.answerSuffix, defaults.answerSuffix),
 		},
 	};
 }

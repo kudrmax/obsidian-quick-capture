@@ -77,9 +77,10 @@ export class CaptureService {
 			for (const [index, answer] of answered.entries()) {
 				if (answer === null) continue;
 				const content = answer.kind === "text" ? answer.text.trim() : await this.saveVoiceAnswer(answer.recording, notePath, index, saved, destination);
-				lines.push({ question: questions[index].text.trim(), content });
+				lines.push({ question: questions[index].text.trim(), content, voice: answer.kind === "audio" });
 			}
-			const entry = this.answerEntry.lines(format, destination.mode.headLine, lines, tags).join("\n");
+			const { questionFormat, headLine } = destination.mode;
+			const entry = this.answerEntry.lines(questionFormat, headLine, lines, tags).join("\n");
 			return await this.append(notePath, format.heading, entry);
 		} catch (error) {
 			await this.discardAll(saved);

@@ -9,6 +9,7 @@ import {
 	movePaths,
 	ModeFile,
 	modeTagGroups,
+	DEFAULT_QUESTION_FORMAT,
 	NO_OVERRIDES,
 	pickDestination,
 	resolveAfterSend,
@@ -25,12 +26,10 @@ const DEFAULTS: EntryFormat = {
 	textSuffix: "",
 	audioPrefix: "- {{time}} ",
 	audioSuffix: " #transcribe",
-	answerPrefix: "\t- **{{question}}** ",
-	answerSuffix: "",
 };
 
 function mode(overrides: Partial<CaptureMode> = {}): CaptureMode {
-	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, ...overrides };
+	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT, ...overrides };
 }
 
 describe("resolveFormat", () => {
@@ -39,14 +38,6 @@ describe("resolveFormat", () => {
 			heading: { text: "Дневник", level: 2 },
 			text: { prefix: "- {{time}} ", suffix: "" },
 			audio: { prefix: "- {{time}} ", suffix: " #transcribe" },
-			answer: { prefix: "\t- **{{question}}** ", suffix: "" },
-		});
-	});
-
-	it("uses the mode's own answer format", () => {
-		expect(resolveFormat(DEFAULTS, { ...NO_OVERRIDES, answerPrefix: "  - {{question}}: " }).answer).toEqual({
-			prefix: "  - {{question}}: ",
-			suffix: "",
 		});
 	});
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CaptureMode, EntryFormat, NO_OVERRIDES, resolveFormat } from "../src/domain/CaptureMode";
-import { modeSummary, previewEntries } from "../src/domain/SettingsPreview";
+import { CaptureMode, DEFAULT_QUESTION_FORMAT, EntryFormat, NO_OVERRIDES, resolveFormat } from "../src/domain/CaptureMode";
+import { modeSummary, previewAnswers, previewEntries } from "../src/domain/SettingsPreview";
 
 const clock = { now: () => new Date(2026, 8, 30, 21, 37) };
 const DEFAULTS: EntryFormat = {
@@ -10,12 +10,10 @@ const DEFAULTS: EntryFormat = {
 	textSuffix: "",
 	audioPrefix: "- {{date}} ",
 	audioSuffix: " #transcribe",
-	answerPrefix: "\t- **{{question}}** ",
-	answerSuffix: "",
 };
 
-function mode(target: CaptureMode["target"], overrides = NO_OVERRIDES, questions: CaptureMode["questions"] = []): CaptureMode {
-	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [], questions, headLine: true };
+function mode(target: CaptureMode["target"], overrides = NO_OVERRIDES, questions: CaptureMode["questions"] = [], headLine = true): CaptureMode {
+	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [], questions, headLine, questionFormat: DEFAULT_QUESTION_FORMAT };
 }
 
 const file = (alias: string, path: string) => ({ id: path, alias, path, lastUsedAt: 0 });
@@ -26,18 +24,7 @@ describe("previewEntries", () => {
 			heading: "## Journal",
 			text: "- 21:37 Your text",
 			audio: "- 2026-09-30 ![[Recording.m4a]] #transcribe",
-			answers: [],
 		});
-	});
-
-	it("shows a questions entry with a text answer and a voice answer for the last question", () => {
-		const preview = previewEntries(resolveFormat(DEFAULTS, NO_OVERRIDES), true, clock, "#like", ["Как встал?", "Что делал?"]);
-		expect(preview.answers).toEqual(["- 21:37 #like", "\t- **Как встал?** Your text", "\t- **Что делал?** ![[Recording.m4a]]"]);
-	});
-
-	it("shows only the answer lines when there is no head line", () => {
-		const preview = previewEntries(resolveFormat(DEFAULTS, NO_OVERRIDES), true, clock, "#like", ["Как встал?"], false);
-		expect(preview.answers).toEqual(["\t- **Как встал?** ![[Recording.m4a]] #like"]);
 	});
 
 	it("links audio without embedding and has no heading line when entries go to the end of the note", () => {
@@ -51,6 +38,33 @@ describe("previewEntries", () => {
 		const preview = previewEntries(resolveFormat(DEFAULTS, NO_OVERRIDES), true, clock, "#like");
 		expect(preview.text).toBe("- 21:37 Your text #like");
 		expect(preview.audio).toBe("- 2026-09-30 ![[Recording.m4a]] #like #transcribe");
+	});
+});
+
+describe("previewAnswers", () => {
+	const daily = { type: "daily", daysBack: 0 } as const;
+	const questions = [
+		{ text: "Как встал?", required: true },
+		{ text: "Что делал?", required: false },
+	];
+
+	it("shows the line and the nested answers, the last one as a voice answer", () => {
+		expect(previewAnswers(mode(daily, NO_OVERRIDES, questions), true, clock, "#like")).toEqual([
+			"- 21:37 #like",
+			"\t- **Как встал?** Your text",
+			"\t- **Что делал?** ![[Recording.m4a]]",
+		]);
+	});
+
+	it("shows only the answers when the line is hidden", () => {
+		expect(previewAnswers(mode(daily, NO_OVERRIDES, questions, false), false, clock, "#like")).toEqual([
+			"- **Как встал?** Your text #like",
+			"- **Что делал?** [[Recording.m4a]]",
+		]);
+	});
+
+	it("shows a single question as a text answer", () => {
+		expect(previewAnswers(mode(daily, NO_OVERRIDES, [questions[0]]), true, clock)).toEqual(["- 21:37", "\t- **Как встал?** Your text"]);
 	});
 });
 
