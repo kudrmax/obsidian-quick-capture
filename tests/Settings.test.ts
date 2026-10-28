@@ -27,7 +27,7 @@ describe("loadSettings", () => {
 		expect(settings.defaults).toEqual(DEFAULT_SETTINGS.defaults);
 		expect(settings.tagGroups).toEqual([]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [] },
+			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 	});
@@ -48,7 +48,7 @@ describe("loadSettings", () => {
 		expect(settings.afterSend).toBe("stay");
 		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0], closeOnPick: false }]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"], questions: [] },
+			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"], questions: [], headLine: true },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 		expect(settings).not.toHaveProperty("heading");
@@ -73,6 +73,7 @@ describe("loadSettings", () => {
 			overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default",
 			tagGroupIds: [],
 			questions: [{ text: "Как встал?", required: true }],
+			headLine: false,
 		});
 		saved.lastDestinationId = "b";
 		expect(loadSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
@@ -113,6 +114,7 @@ describe("loadSettings", () => {
 			overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default",
 			tagGroupIds: ["group-1"],
 			questions: [],
+			headLine: true,
 		});
 		expect(settings.lastDestinationId).toBe("book");
 		expect(settings).not.toHaveProperty("lastModeId");
@@ -128,12 +130,14 @@ describe("loadSettings", () => {
 	it("gives modes saved before questions no questions and the default answer format", () => {
 		const saved = JSON.parse(JSON.stringify(loadSettings(LEGACY)));
 		delete saved.modes[0].questions;
+		delete saved.modes[0].headLine;
 		delete saved.modes[0].overrides.answerPrefix;
 		delete saved.modes[0].overrides.answerSuffix;
 		delete saved.defaults.answerPrefix;
 		delete saved.defaults.answerSuffix;
 		const settings = loadSettings(saved);
 		expect(settings.modes[0].questions).toEqual([]);
+		expect(settings.modes[0].headLine).toBe(true);
 		expect(settings.modes[0].overrides).toEqual(NO_OVERRIDES);
 		expect(settings.defaults.answerPrefix).toBe("\t- **{{question}}** ");
 		expect(settings.defaults.answerSuffix).toBe("");

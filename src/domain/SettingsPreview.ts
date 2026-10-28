@@ -1,5 +1,6 @@
 import { askedQuestions, CaptureMode, EntryFormat, noteName, resolveFormat, ResolvedFormat } from "./CaptureMode";
 import { Clock } from "./Clock";
+import { AnswerEntry } from "./AnswerEntry";
 import { EntryFormatter } from "./EntryFormatter";
 
 const SAMPLE_TEXT = "Your text";
@@ -18,19 +19,20 @@ export function previewEntries(
 	clock: Clock,
 	sampleTag = "",
 	questions: readonly string[] = [],
+	headLine = true,
 ): EntryPreview {
 	const formatter = new EntryFormatter(clock);
 	const tags = [sampleTag];
 	const recording = `${embedAudio ? "!" : ""}${SAMPLE_RECORDING}`;
-	const head = { prefix: format.text.prefix.trimEnd(), suffix: format.text.suffix };
-	const answers = questions.map((question, index) =>
-		formatter.format(format.answer, index === questions.length - 1 ? recording : SAMPLE_TEXT, [], question),
-	);
+	const answers = questions.map((question, index) => ({
+		question,
+		content: index === questions.length - 1 ? recording : SAMPLE_TEXT,
+	}));
 	return {
 		heading: format.heading ? `${"#".repeat(format.heading.level)} ${format.heading.text}` : null,
 		text: formatter.format(format.text, SAMPLE_TEXT, tags),
 		audio: formatter.format(format.audio, recording, tags),
-		answers: questions.length === 0 ? [] : [formatter.format(head, "", tags).trimEnd(), ...answers],
+		answers: questions.length === 0 ? [] : new AnswerEntry(formatter).lines(format, headLine, answers, tags),
 	};
 }
 

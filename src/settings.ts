@@ -60,7 +60,7 @@ export function loadSettings(saved: unknown): CaptureSettings {
 	return structuredClone(settings);
 }
 
-type ModeChoices = "afterSend" | "audioLink" | "questions";
+type ModeChoices = "afterSend" | "audioLink" | "questions" | "headLine";
 type SavedMode = Omit<CaptureMode, ModeChoices> & Partial<Pick<CaptureMode, ModeChoices>>;
 type SavedTarget = ModeTarget | { type: "daily"; daysBack?: unknown };
 type MultiFileMode = Omit<SavedMode, "target"> & { target: SavedTarget };
@@ -81,7 +81,7 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 		tagGroups: rest.tagGroups.map((group) => ({ ...group, closeOnPick: group.closeOnPick === true })),
 		modes: modes.map((mode) => {
 			const filesMode = toFilesMode(mode);
-			return { afterSend: "default", audioLink: "default", questions: [], ...filesMode, overrides: { ...NO_OVERRIDES, ...filesMode.overrides } };
+			return { afterSend: "default", audioLink: "default", questions: [], headLine: true, ...filesMode, overrides: { ...NO_OVERRIDES, ...filesMode.overrides } };
 		}),
 		lastDestinationId: saved.lastDestinationId ?? lastModeId ?? DAILY_MODE_ID,
 	};
@@ -127,5 +127,5 @@ function pickFormat(legacy: Partial<LegacySettings>): Partial<EntryFormat> {
 }
 
 function dailyMode(tagGroupIds: string[]): CaptureMode {
-	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds, questions: [] };
+	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds, questions: [], headLine: true };
 }

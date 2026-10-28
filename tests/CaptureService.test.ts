@@ -41,7 +41,7 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [] };
+const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true };
 const BOOKS_MODE: CaptureMode = {
 	id: "books",
 	title: "Книги",
@@ -49,6 +49,7 @@ const BOOKS_MODE: CaptureMode = {
 	overrides: { ...NO_OVERRIDES, heading: "Цитаты", textPrefix: "> " }, afterSend: "default", audioLink: "default",
 	tagGroupIds: [],
 	questions: [],
+	headLine: true,
 };
 const MORNING_MODE: CaptureMode = {
 	...DAILY_MODE,
@@ -247,6 +248,13 @@ describe("CaptureService.captureAnswers", () => {
 				"\t- **Что делал утром?** Бассейн",
 			].join("\n"),
 		);
+	});
+
+	it("writes only the answer lines when the mode has no head line, with tags on the first one", async () => {
+		const { notes, service } = setup();
+		const mode: CaptureMode = { ...MORNING_MODE, headLine: false, overrides: { ...MORNING_MODE.overrides, answerPrefix: "- {{question}} " } };
+		await service.captureAnswers({ ...MORNING, mode }, [text("Тяжело"), text(""), text("Бассейн")], ["#утро"]);
+		expect(notes.files.get(NOTE)).toBe("## Утро\n\n- Как встал? Тяжело #утро\n- Что делал утром? Бассейн");
 	});
 
 	it("leaves out unanswered optional questions", async () => {

@@ -58,6 +58,10 @@ const AUDIO_LINK_OPTIONS: Record<Exclude<AudioLinkChoice, "default">, string> = 
 	embed: "Embed: ![[Recording.m4a]]",
 	link: "Link: [[Recording.m4a]]",
 };
+const HEAD_LINE_OPTIONS = {
+	text: "Made with the Text format, e.g. - 23:35",
+	none: "None, the entry is just the answers",
+};
 const AUDIO_LINK_HINT = "An embed shows a player in the note, a link stays plain text.";
 
 export class SettingsTab extends PluginSettingTab {
@@ -101,6 +105,7 @@ export class SettingsTab extends PluginSettingTab {
 				audioLink: "default",
 				tagGroupIds: [],
 				questions: [],
+				headLine: true,
 			};
 			this.settings.modes.push(mode);
 			this.openCard = modeKey(mode);
@@ -138,6 +143,7 @@ export class SettingsTab extends PluginSettingTab {
 					systemClock,
 					this.sampleTag(mode),
 					askedQuestions(mode).map((question) => question.text.trim()),
+					mode.headLine,
 				),
 			showsAnswers: () => askedQuestions(mode).length > 0,
 		});
@@ -194,6 +200,12 @@ export class SettingsTab extends PluginSettingTab {
 				? "Without questions an entry is free text."
 				: "Each question gets its own field on the capture screen. All answers go to the note as one entry. An empty answer is left out.",
 		);
+		if (mode.questions.length === 0) return;
+		choice(body, "First line", HEAD_LINE_OPTIONS, mode.headLine ? "text" : "none", (value) => {
+			mode.headLine = value === "text";
+			return this.changed();
+		});
+		hint(body, "The answers follow it, each made with the Answer format below.");
 	}
 
 	private targetFields(body: HTMLElement, mode: CaptureMode): () => void {

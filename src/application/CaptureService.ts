@@ -1,5 +1,6 @@
 import { askedQuestions, Destination, destinationProblem, resolveEmbedAudio, resolveFormat } from "../domain/CaptureMode";
 import { Clock } from "../domain/Clock";
+import { AnswerEntry, AnswerLine } from "../domain/AnswerEntry";
 import { EntryFormatter } from "../domain/EntryFormatter";
 import { partFileNames } from "../domain/RecordingParts";
 import { HeadingTarget, insertEntry } from "../domain/SectionInserter";
@@ -29,9 +30,11 @@ interface CaptureDependencies {
 
 export class CaptureService {
 	private readonly formatter: EntryFormatter;
+	private readonly answerEntry: AnswerEntry;
 
 	constructor(private readonly deps: CaptureDependencies) {
 		this.formatter = new EntryFormatter(deps.clock);
+		this.answerEntry = new AnswerEntry(this.formatter);
 	}
 
 	async captureText(destination: Destination, text: string, tags: readonly string[] = []): Promise<CapturedEntry> {
@@ -68,16 +71,16 @@ export class CaptureService {
 		if (answered.every((answer) => answer === null)) throw new CaptureError("Nothing to add");
 		const notePath = await this.resolveTarget(destination);
 		const format = resolveFormat(this.deps.settings().defaults, destination.mode.overrides);
-		const head = { prefix: format.text.prefix.trimEnd(), suffix: format.text.suffix };
-		const lines = [this.formatter.format(head, "", tags).trimEnd()];
+		const lines: AnswerLine[] = [];
 		const saved: SavedAttachment[] = [];
 		try {
 			for (const [index, answer] of answered.entries()) {
 				if (answer === null) continue;
 				const content = answer.kind === "text" ? answer.text.trim() : await this.saveVoiceAnswer(answer.recording, notePath, index, saved, destination);
-				lines.push(this.formatter.format(format.answer, content, [], questions[index].text.trim()));
+				lines.push({ question: questions[index].text.trim(), content });
 			}
-			return await this.append(notePath, format.heading, lines.join("\n"));
+			const entry = this.answerEntry.lines(format, destination.mode.headLine, lines, tags).join("\n");
+			return await this.append(notePath, format.heading, entry);
 		} catch (error) {
 			await this.discardAll(saved);
 			throw error;

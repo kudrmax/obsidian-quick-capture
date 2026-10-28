@@ -57,6 +57,7 @@ export interface CaptureMode {
 	audioLink: AudioLinkChoice;
 	tagGroupIds: string[];
 	questions: Question[];
+	headLine: boolean;
 }
 
 export interface Destination {
