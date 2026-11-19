@@ -1,4 +1,4 @@
-import { AfterSend, CaptureMode, DEFAULT_QUESTION_FORMAT, EntryFormat, isDaysBack, ModeTarget, NO_OVERRIDES, QuestionFormat } from "./domain/CaptureMode";
+import { AfterSend, CaptureMode, DEFAULT_QUESTION_FORMAT, EntryFormat, isDaysBack, ModeTarget, NO_OVERRIDES, Question, QuestionFormat } from "./domain/CaptureMode";
 import { DEFAULT_DAY_END, isDayEnd } from "./domain/DiaryDayClock";
 import { parseHeading } from "./domain/SectionInserter";
 
@@ -58,7 +58,7 @@ export function loadSettings(saved: unknown): CaptureSettings {
 	return structuredClone(settings);
 }
 
-type ModeChoices = "afterSend" | "audioLink" | "questions" | "headLine" | "questionFormat";
+type ModeChoices = "afterSend" | "audioLink" | "questions" | "headLine" | "questionFormat" | "hint";
 type SavedMode = Omit<CaptureMode, ModeChoices> & Partial<Pick<CaptureMode, ModeChoices>>;
 type SavedTarget = ModeTarget | { type: "daily"; daysBack?: unknown };
 type MultiFileMode = Omit<SavedMode, "target"> & { target: SavedTarget };
@@ -82,10 +82,10 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 			return {
 				afterSend: "default",
 				audioLink: "default",
-				questions: [],
 				headLine: true,
 				...filesMode,
 				questionFormat: questionFormat(filesMode.questionFormat),
+				...modeHint(filesMode),
 				overrides: knownKeys(NO_OVERRIDES, filesMode.overrides),
 			};
 		}),
@@ -96,6 +96,17 @@ function migrateModes(data: Record<string, unknown>): CaptureSettings {
 function knownKeys<T extends object>(template: T, saved: Partial<T> | undefined): T {
 	const values = (saved ?? {}) as Record<string, unknown>;
 	return Object.fromEntries(Object.entries(template).map(([key, value]) => [key, key in values ? values[key] : value])) as T;
+}
+
+type SavedQuestion = Question & { hint?: string };
+
+function modeHint(mode: SavedMode): Pick<CaptureMode, "questions" | "hint"> {
+	const questions = (mode.questions ?? []) as SavedQuestion[];
+	const questionHints = questions.map((question) => question.hint?.trim() ?? "").filter((hint) => hint !== "");
+	return {
+		questions: questions.map(({ hint: _hint, ...question }) => question),
+		hint: mode.hint ?? questionHints.join("\n\n"),
+	};
 }
 
 function questionFormat(saved: Partial<QuestionFormat> | undefined): QuestionFormat {
@@ -146,5 +157,5 @@ function pickFormat(legacy: Partial<LegacySettings>): Partial<EntryFormat> {
 }
 
 function dailyMode(tagGroupIds: string[]): CaptureMode {
-	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds, questions: [], headLine: true, questionFormat: structuredClone(DEFAULT_QUESTION_FORMAT) };
+	return { id: DAILY_MODE_ID, title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds, questions: [], headLine: true, questionFormat: structuredClone(DEFAULT_QUESTION_FORMAT), hint: "" };
 }

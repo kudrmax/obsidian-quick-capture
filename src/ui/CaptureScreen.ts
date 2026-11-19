@@ -129,7 +129,6 @@ export class CaptureScreen {
 				this.renderText();
 				this.renderControls();
 			},
-			onHint: (question) => options.showHint(question.text.trim(), question.hint?.trim() ?? ""),
 		});
 
 		const recorderView = body.createDiv({ cls: "dqc-recorder" });
@@ -548,6 +547,19 @@ export class CaptureScreen {
 			this.titleEl.removeAttribute("aria-label");
 		}
 		this.titleEl.toggleClass("is-open", this.modePicker?.isOpen() ?? false);
+		this.renderHintButton();
+	}
+
+	private renderHintButton(): void {
+		const { mode, title } = this.destination();
+		const text = mode.hint.trim();
+		if (text === "") return;
+		const button = this.titleEl.createEl("button", { cls: "dqc-title-hint clickable-icon", attr: { "aria-label": "Hint" } });
+		setIcon(button, "circle-help");
+		button.addEventListener("click", (event) => {
+			event.stopPropagation();
+			this.options.showHint(title, text);
+		});
 	}
 
 	private renderTimer(): void {

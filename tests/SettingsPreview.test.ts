@@ -13,7 +13,7 @@ const DEFAULTS: EntryFormat = {
 };
 
 function mode(target: CaptureMode["target"], overrides = NO_OVERRIDES, questions: CaptureMode["questions"] = [], headLine = true): CaptureMode {
-	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [], questions, headLine, questionFormat: DEFAULT_QUESTION_FORMAT };
+	return { id: "m", title: "", target, overrides, afterSend: "default", audioLink: "default", tagGroupIds: [], questions, headLine, questionFormat: DEFAULT_QUESTION_FORMAT, hint: "" };
 }
 
 const file = (alias: string, path: string) => ({ id: path, alias, path, lastUsedAt: 0 });

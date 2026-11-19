@@ -41,7 +41,7 @@ class FakeAttachments implements AttachmentStore {
 	}
 }
 
-const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT };
+const DAILY_MODE: CaptureMode = { id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT, hint: "" };
 const BOOKS_MODE: CaptureMode = {
 	id: "books",
 	title: "Книги",
@@ -51,6 +51,7 @@ const BOOKS_MODE: CaptureMode = {
 	questions: [],
 	headLine: true,
 	questionFormat: DEFAULT_QUESTION_FORMAT,
+	hint: "",
 };
 const MORNING_MODE: CaptureMode = {
 	...DAILY_MODE,

@@ -19,19 +19,20 @@ export class HintModal extends Modal {
 export class HintEditModal extends Modal {
 	constructor(
 		app: App,
-		private readonly question: string,
+		private readonly title: string,
 		private readonly hint: string,
 		private readonly onChange: (hint: string) => void,
+		private readonly onDone: () => void,
 	) {
 		super(app);
 	}
 
 	override onOpen(): void {
 		this.modalEl.addClass("dqc-hint-modal");
-		this.setTitle(this.question.trim() || "Hint");
+		this.setTitle(this.title.trim() || "Hint");
 		const textarea = this.contentEl.createEl("textarea", {
 			cls: "dqc-hint-input",
-			attr: { rows: "14", placeholder: "Shown when the ? next to the question is tapped" },
+			attr: { rows: "14", placeholder: "Shown when the ? next to the title is tapped" },
 		});
 		textarea.value = this.hint;
 		textarea.addEventListener("input", () => this.onChange(textarea.value));
@@ -42,5 +43,6 @@ export class HintEditModal extends Modal {
 
 	override onClose(): void {
 		this.contentEl.empty();
+		this.onDone();
 	}
 }

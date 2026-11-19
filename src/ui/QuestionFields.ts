@@ -19,7 +19,6 @@ interface QuestionFieldsOptions {
 	decorate: (textarea: HTMLTextAreaElement) => void;
 	onFocus: (editor: Editor) => void;
 	onInput: () => void;
-	onHint: (question: Question) => void;
 }
 
 export class QuestionFields {
@@ -93,7 +92,6 @@ export class QuestionFields {
 		const el = this.el.createDiv({ cls: "dqc-field" });
 		el.createDiv({ cls: "dqc-question", text: question.text.trim() });
 		const editorEl = el.createDiv({ cls: "dqc-editor" });
-		if (question.hint?.trim()) this.addHintButton(el, editorEl, question);
 		const highlight = editorEl.createDiv({ cls: "dqc-highlight", attr: { "aria-hidden": "true" } });
 		const textarea = editorEl.createEl("textarea", {
 			cls: "dqc-text",
@@ -110,16 +108,6 @@ export class QuestionFields {
 		el.addEventListener("click", () => this.focus(field));
 		this.options.decorate(textarea);
 		return field;
-	}
-
-	private addHintButton(el: HTMLElement, editorEl: HTMLElement, question: Question): void {
-		el.addClass("has-hint");
-		const button = editorEl.createEl("button", { cls: "dqc-hint-button clickable-icon", attr: { "aria-label": "Hint" } });
-		setIcon(button, "circle-help");
-		button.addEventListener("click", (event) => {
-			event.stopPropagation();
-			this.options.onHint(question);
-		});
 	}
 
 	focusCurrent(): void {

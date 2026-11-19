@@ -27,7 +27,7 @@ describe("loadSettings", () => {
 		expect(settings.defaults).toEqual(DEFAULT_SETTINGS.defaults);
 		expect(settings.tagGroups).toEqual([]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT },
+			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT, hint: "" },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 	});
@@ -46,7 +46,7 @@ describe("loadSettings", () => {
 		expect(settings.afterSend).toBe("stay");
 		expect(settings.tagGroups).toEqual([{ id: "group-1", ...LEGACY.tagGroups[0], closeOnPick: false }]);
 		expect(settings.modes).toEqual([
-			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT },
+			{ id: "daily", title: "", target: { type: "daily", daysBack: 0 }, overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default", tagGroupIds: ["group-1"], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT, hint: "" },
 		]);
 		expect(settings.lastDestinationId).toBe("daily");
 		expect(settings).not.toHaveProperty("heading");
@@ -70,9 +70,10 @@ describe("loadSettings", () => {
 			target: { type: "files", files: [{ id: "b", alias: "Book", path: "B.md", lastUsedAt: 7 }] },
 			overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default",
 			tagGroupIds: [],
-			questions: [{ text: "Как встал?", required: true, hint: "Бодро, вяло, разбит" }],
+			questions: [{ text: "Как встал?", required: true }],
 			headLine: false,
 			questionFormat: { line: { prefix: "- ", suffix: "" }, text: { prefix: "- {{question}}: ", suffix: "" }, voice: { prefix: "- {{question}}: ", suffix: " #transcribe" } },
+			hint: "Бодро, вяло, разбит",
 		});
 		saved.lastDestinationId = "b";
 		expect(loadSettings(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
@@ -114,7 +115,7 @@ describe("loadSettings", () => {
 			tagGroupIds: ["group-1"],
 			questions: [],
 			headLine: true,
-			questionFormat: DEFAULT_QUESTION_FORMAT,
+			questionFormat: DEFAULT_QUESTION_FORMAT, hint: "",
 		});
 		expect(settings.lastDestinationId).toBe("book");
 		expect(settings).not.toHaveProperty("lastModeId");
@@ -133,6 +134,29 @@ describe("loadSettings", () => {
 		delete saved.modes[0].headLine;
 		delete saved.modes[0].questionFormat;
 		expect(loadSettings(saved).modes[0]).toMatchObject({ questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT });
+	});
+
+	it("gives modes saved before hints an empty one", () => {
+		const saved = JSON.parse(JSON.stringify(loadSettings(LEGACY)));
+		delete saved.modes[0].hint;
+		expect(loadSettings(saved).modes[0].hint).toBe("");
+	});
+
+	it("moves hints saved on questions to their mode, one after another", () => {
+		const saved = JSON.parse(JSON.stringify(loadSettings(LEGACY)));
+		delete saved.modes[0].hint;
+		saved.modes[0].questions = [
+			{ text: "Ситуация", required: false },
+			{ text: "Эмоции", required: false, hint: "Грусть: тоска\n" },
+			{ text: "Тело", required: true, hint: "Где напряжено" },
+		];
+		const mode = loadSettings(saved).modes[0];
+		expect(mode.hint).toBe("Грусть: тоска\n\nГде напряжено");
+		expect(mode.questions).toEqual([
+			{ text: "Ситуация", required: false },
+			{ text: "Эмоции", required: false },
+			{ text: "Тело", required: true },
+		]);
 	});
 
 	it("fills a partly saved question format from the default", () => {
