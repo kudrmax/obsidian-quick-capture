@@ -70,7 +70,7 @@ describe("loadSettings", () => {
 			target: { type: "files", files: [{ id: "b", alias: "Book", path: "B.md", lastUsedAt: 7 }] },
 			overrides: NO_OVERRIDES, afterSend: "default", audioLink: "default",
 			tagGroupIds: [],
-			questions: [{ text: "Как встал?", required: true }],
+			questions: [{ text: "Как встал?", required: true, hint: "Бодро, вяло, разбит" }],
 			headLine: false,
 			questionFormat: { line: { prefix: "- ", suffix: "" }, text: { prefix: "- {{question}}: ", suffix: "" }, voice: { prefix: "- {{question}}: ", suffix: " #transcribe" } },
 		});

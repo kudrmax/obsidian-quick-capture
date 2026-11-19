@@ -32,6 +32,7 @@ export interface CaptureScreenOptions {
 	openNote: (entry: CapturedEntry) => void;
 	autoFocus: boolean;
 	decorateTextInput: (textarea: HTMLTextAreaElement, destination: () => Destination) => void;
+	showHint: (title: string, text: string) => void;
 	onClose: () => void;
 }
 
@@ -128,6 +129,7 @@ export class CaptureScreen {
 				this.renderText();
 				this.renderControls();
 			},
+			onHint: (question) => options.showHint(question.text.trim(), question.hint?.trim() ?? ""),
 		});
 
 		const recorderView = body.createDiv({ cls: "dqc-recorder" });

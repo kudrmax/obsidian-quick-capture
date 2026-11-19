@@ -9,6 +9,7 @@ import {
 	isDaysBack,
 	listDestinations,
 	ModeFile,
+	Question,
 	modeTagGroups,
 	DEFAULT_QUESTION_FORMAT,
 	NO_OVERRIDES,
@@ -23,6 +24,7 @@ import { moveItem } from "../domain/ListOrder";
 import { EntryPreview, modeSummary, previewAnswers, previewEntries } from "../domain/SettingsPreview";
 import { CaptureSettings, newId, QuickTag, TagGroup } from "../settings";
 import { FileSuggest } from "./FileSuggest";
+import { HintEditModal } from "./HintModal";
 import { IconPicker } from "./IconPicker";
 import { SettingsCard } from "./SettingsCard";
 import { renderTagLabel } from "./TagIcon";
@@ -370,6 +372,19 @@ export class SettingsTab extends PluginSettingTab {
 		return () => lineRow.toggle(mode.headLine);
 	}
 
+	private hintButton(row: HTMLElement, question: Question): void {
+		const button = new ExtraButtonComponent(row).setIcon("circle-help").setTooltip("Hint");
+		const showHint = () => button.extraSettingsEl.toggleClass("is-active", Boolean(question.hint?.trim()));
+		showHint();
+		button.onClick(() =>
+			new HintEditModal(this.app, question.text, question.hint ?? "", (hint) => {
+				question.hint = hint;
+				showHint();
+				void this.changed();
+			}).open(),
+		);
+	}
+
 	private questionFields(body: HTMLElement, mode: CaptureMode): void {
 		label(body, "Questions");
 		mode.questions.forEach((question, index) => {
@@ -392,6 +407,7 @@ export class SettingsTab extends PluginSettingTab {
 				showRequired();
 				await this.changed();
 			});
+			this.hintButton(row, question);
 			const move = (step: -1 | 1) => async () => {
 				moveItem(mode.questions, index, step);
 				await this.saveAndRedraw();
