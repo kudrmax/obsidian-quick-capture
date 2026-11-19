@@ -66,7 +66,7 @@ const AUDIO_LINK_OPTIONS: Record<Exclude<AudioLinkChoice, "default">, string> = 
 	embed: "Embed: ![[Recording.m4a]]",
 	link: "Link: [[Recording.m4a]]",
 };
-const QUESTION_PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · {{question}} → the question · spaces at the edges are kept";
+const QUESTION_PLACEHOLDER_HINT = "{{time}} → 23:35 · {{date}} → 2026-09-30 · {{question}} → the note text of the question · spaces at the edges are kept";
 const AUDIO_LINK_HINT = "An embed shows a player in the note, a link stays plain text.";
 
 export class SettingsTab extends PluginSettingTab {
@@ -389,11 +389,20 @@ export class SettingsTab extends PluginSettingTab {
 		label(body, "Questions");
 		mode.questions.forEach((question, index) => {
 			const row = line(body);
+			const label = new TextComponent(row).setValue(question.noteLabel ?? "").onChange((value) => {
+				question.noteLabel = value;
+				return this.changed();
+			});
+			label.inputEl.addClass("dqc-file-alias");
+			label.inputEl.setAttribute("aria-label", "In the note");
+			const showLabelPlaceholder = () => label.setPlaceholder(question.text.trim() || "In the note");
+			showLabelPlaceholder();
 			new TextComponent(row)
 				.setPlaceholder("How did you sleep?")
 				.setValue(question.text)
 				.onChange((value) => {
 					question.text = value;
+					showLabelPlaceholder();
 					return this.changed();
 				});
 			const required = row.createEl("button", { cls: "dqc-chip", text: "Required" });
@@ -427,7 +436,7 @@ export class SettingsTab extends PluginSettingTab {
 			hint(body, "Without questions an entry is free text. With them, each question gets its own field and all answers go to the note as one entry.");
 			return;
 		}
-		hint(body, "Each question gets its own field on the capture screen. An empty answer is left out.");
+		hint(body, "Left: what goes to the note, the question when empty. Right: what the capture screen asks. An empty answer is left out.");
 		label(body, "Line above the answers");
 		const options = body.createDiv({ cls: "dqc-seg" });
 		for (const [shown, text] of [[true, "Show"], [false, "Hide"]] as const) {

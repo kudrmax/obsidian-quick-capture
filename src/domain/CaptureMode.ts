@@ -43,6 +43,11 @@ export interface Question {
 	text: string;
 	required: boolean;
 	hint?: string;
+	noteLabel?: string;
+}
+
+export function noteLabel(question: Question): string {
+	return question.noteLabel?.trim() || question.text.trim();
 }
 
 export interface QuestionFormat {
