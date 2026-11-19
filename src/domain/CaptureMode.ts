@@ -42,6 +42,7 @@ export type ModeTarget = { type: "daily"; daysBack: number } | { type: "files"; 
 export interface Question {
 	text: string;
 	required: boolean;
+	hint?: string;
 	noteLabel?: string;
 }
 

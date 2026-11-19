@@ -1015,3 +1015,38 @@ body.is-mobile .dqc-controls {
 .dqc-time-input::-webkit-calendar-picker-indicator {
 	display: none;
 }
+
+.dqc-field.has-hint .dqc-editor {
+	--dqc-hint-size: calc(1.25em * 1.5);
+	padding-inline: var(--dqc-hint-size);
+}
+
+.dqc-hint-button.clickable-icon {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: var(--dqc-hint-size);
+	height: var(--dqc-hint-size);
+	padding: 0;
+	color: var(--text-faint);
+}
+
+.dqc-hint-button svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+.dqc-hint-text {
+	white-space: pre-wrap;
+	user-select: text;
+	line-height: var(--line-height-normal);
+}
+
+.dqc-hint-input {
+	width: 100%;
+	resize: vertical;
+}
+
+.dqc-settings .dqc-card .clickable-icon.is-active {
+	color: var(--interactive-accent);
+}
