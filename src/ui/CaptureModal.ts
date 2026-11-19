@@ -6,6 +6,7 @@ import { AudioRecorder } from "../infrastructure/MediaAudioRecorder";
 import { CaptureSettings } from "../settings";
 import { CaptureScreen } from "./CaptureScreen";
 import { CaptureSuggest } from "./CaptureSuggest";
+import { HintModal } from "./HintModal";
 
 export interface CaptureModalDependencies {
 	service: CaptureService;
@@ -44,6 +45,7 @@ export class CaptureModal extends Modal {
 			autoFocus: !Platform.isMobile || this.deps.settings().openKeyboardOnMobile,
 			decorateTextInput: (textarea, destination) =>
 				new CaptureSuggest(this.app, textarea, () => this.deps.linkSourcePath(destination())),
+			showHint: (title, text) => new HintModal(this.app, title, text).open(),
 			onClose: () => {
 				this.closingConfirmed = true;
 				this.close();
