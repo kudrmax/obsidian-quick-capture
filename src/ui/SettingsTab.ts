@@ -9,7 +9,6 @@ import {
 	isDaysBack,
 	listDestinations,
 	ModeFile,
-	Question,
 	modeTagGroups,
 	DEFAULT_QUESTION_FORMAT,
 	NO_OVERRIDES,
@@ -112,6 +111,7 @@ export class SettingsTab extends PluginSettingTab {
 				questions: [],
 				headLine: true,
 				questionFormat: structuredClone(DEFAULT_QUESTION_FORMAT),
+				hint: "",
 			};
 			this.settings.modes.push(mode);
 			this.openCard = modeKey(mode);
@@ -136,6 +136,7 @@ export class SettingsTab extends PluginSettingTab {
 
 		const refreshTarget = this.targetFields(body, mode);
 		this.questionFields(body, mode);
+		this.hintField(body, mode);
 		const asksQuestions = mode.questions.length > 0;
 		const refreshFormat = this.formatFields(body, mode.overrides, {
 			placeholder: (key) => this.settings.defaults[key] || (key === "heading" ? "No heading" : "empty"),
@@ -372,17 +373,25 @@ export class SettingsTab extends PluginSettingTab {
 		return () => lineRow.toggle(mode.headLine);
 	}
 
-	private hintButton(row: HTMLElement, question: Question): void {
-		const button = new ExtraButtonComponent(row).setIcon("circle-help").setTooltip("Hint");
-		const showHint = () => button.extraSettingsEl.toggleClass("is-active", Boolean(question.hint?.trim()));
-		showHint();
-		button.onClick(() =>
-			new HintEditModal(this.app, question.text, question.hint ?? "", (hint) => {
-				question.hint = hint;
-				showHint();
+	private hintField(body: HTMLElement, mode: CaptureMode): void {
+		label(body, "Hint");
+		const edit = async () =>
+			new HintEditModal(this.app, mode.title, mode.hint, (hint) => {
+				mode.hint = hint;
 				void this.changed();
-			}).open(),
-		);
+			}, () => void this.saveAndRedraw()).open();
+		if (mode.hint.trim() === "") {
+			this.addLink(body, "Add hint", edit);
+		} else {
+			const row = line(body);
+			row.createDiv({ cls: "dqc-hint-preview", text: mode.hint.trim() });
+			iconButton(row, "pencil", "Edit hint", edit);
+			iconButton(row, "x", "Remove hint", async () => {
+				mode.hint = "";
+				await this.saveAndRedraw();
+			});
+		}
+		hint(body, "Shown behind the ? next to the title on the capture screen.");
 	}
 
 	private questionFields(body: HTMLElement, mode: CaptureMode): void {
@@ -416,7 +425,6 @@ export class SettingsTab extends PluginSettingTab {
 				showRequired();
 				await this.changed();
 			});
-			this.hintButton(row, question);
 			const move = (step: -1 | 1) => async () => {
 				moveItem(mode.questions, index, step);
 				await this.saveAndRedraw();

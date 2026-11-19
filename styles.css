@@ -630,6 +630,23 @@ body.is-mobile .dqc-controls {
 	-webkit-tap-highlight-color: transparent;
 }
 
+.dqc-screen .dqc-title-hint.clickable-icon {
+	display: inline-flex;
+	width: 1.2em;
+	height: 1.2em;
+	margin: -0.25em 0 -0.25em 0.1em;
+	padding: 0;
+	vertical-align: -0.05em;
+	font-size: inherit;
+	color: var(--text-muted);
+	-webkit-tap-highlight-color: transparent;
+}
+
+.dqc-title-hint svg {
+	width: 0.7em;
+	height: 0.7em;
+}
+
 .dqc-title-chevron {
 	display: inline-block;
 	color: var(--text-muted);
@@ -1016,26 +1033,6 @@ body.is-mobile .dqc-controls {
 	display: none;
 }
 
-.dqc-field.has-hint .dqc-editor {
-	--dqc-hint-size: calc(1.25em * 1.5);
-	padding-inline: var(--dqc-hint-size);
-}
-
-.dqc-hint-button.clickable-icon {
-	position: absolute;
-	top: 0;
-	right: 0;
-	width: var(--dqc-hint-size);
-	height: var(--dqc-hint-size);
-	padding: 0;
-	color: var(--text-faint);
-}
-
-.dqc-hint-button svg {
-	width: var(--icon-s);
-	height: var(--icon-s);
-}
-
 .dqc-hint-text {
 	white-space: pre-wrap;
 	user-select: text;
@@ -1047,6 +1044,11 @@ body.is-mobile .dqc-controls {
 	resize: vertical;
 }
 
-.dqc-settings .dqc-card .clickable-icon.is-active {
-	color: var(--interactive-accent);
+.dqc-hint-preview {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--text-muted);
 }

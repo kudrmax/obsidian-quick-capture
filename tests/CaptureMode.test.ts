@@ -29,7 +29,7 @@ const DEFAULTS: EntryFormat = {
 };
 
 function mode(overrides: Partial<CaptureMode> = {}): CaptureMode {
-	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT, ...overrides };
+	return { id: "m", title: "", target: { type: "daily", daysBack: 0 }, overrides: { ...NO_OVERRIDES }, afterSend: "default", audioLink: "default", tagGroupIds: [], questions: [], headLine: true, questionFormat: DEFAULT_QUESTION_FORMAT, hint: "", ...overrides };
 }
 
 describe("resolveFormat", () => {
