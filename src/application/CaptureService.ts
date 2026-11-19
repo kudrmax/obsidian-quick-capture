@@ -1,4 +1,4 @@
-import { askedQuestions, Destination, destinationProblem, resolveEmbedAudio, resolveFormat } from "../domain/CaptureMode";
+import { askedQuestions, Destination, noteLabel, destinationProblem, resolveEmbedAudio, resolveFormat } from "../domain/CaptureMode";
 import { Clock } from "../domain/Clock";
 import { AnswerEntry, AnswerLine } from "../domain/AnswerEntry";
 import { EntryFormatter } from "../domain/EntryFormatter";
@@ -77,7 +77,7 @@ export class CaptureService {
 			for (const [index, answer] of answered.entries()) {
 				if (answer === null) continue;
 				const content = answer.kind === "text" ? answer.text.trim() : await this.saveVoiceAnswer(answer.recording, notePath, index, saved, destination);
-				lines.push({ question: questions[index].text.trim(), content, voice: answer.kind === "audio" });
+				lines.push({ question: noteLabel(questions[index]), content, voice: answer.kind === "audio" });
 			}
 			const { questionFormat, headLine } = destination.mode;
 			const entry = this.answerEntry.lines(questionFormat, headLine, lines, tags).join("\n");

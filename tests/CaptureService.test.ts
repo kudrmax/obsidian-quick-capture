@@ -281,6 +281,13 @@ describe("CaptureService.captureAnswers", () => {
 		expect(notes.files.get(NOTE)).toBe("## Утро\n\n- [[2026-09-29]]\n\t- **Как встал?** [[Recording 20260929213705 1.m4a]]");
 	});
 
+	it("writes a question's note text instead of the question when it has one", async () => {
+		const { notes, service } = setup();
+		const questions = [{ text: "Ситуация. Только факты, как будто снимала камера", required: false, noteLabel: " Ситуация " }];
+		await service.captureAnswers(morning({ questions, headLine: false }), [text("Опоздал")]);
+		expect(notes.files.get(NOTE)).toBe("## Утро\n\n- **Ситуация** Опоздал");
+	});
+
 	it("refuses answers that leave a required question empty", async () => {
 		const { notes, service } = setup();
 		await expect(service.captureAnswers(MORNING, [text(""), text("Ничего")])).rejects.toThrow('Answer "Как встал?"');

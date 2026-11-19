@@ -1,5 +1,5 @@
 import { AnswerEntry } from "./AnswerEntry";
-import { askedQuestions, CaptureMode, EntryFormat, noteName, resolveFormat, ResolvedFormat } from "./CaptureMode";
+import { askedQuestions, CaptureMode, noteLabel, EntryFormat, noteName, resolveFormat, ResolvedFormat } from "./CaptureMode";
 import { Clock } from "./Clock";
 import { EntryFormatter } from "./EntryFormatter";
 
@@ -27,7 +27,7 @@ export function previewAnswers(mode: CaptureMode, embedAudio: boolean, clock: Cl
 	const answers = questions.map((question, index) => {
 		const voice = index === questions.length - 1 && questions.length > 1;
 		const content = voice ? `${embedAudio ? "!" : ""}${SAMPLE_RECORDING}` : SAMPLE_TEXT;
-		return { question: question.text.trim(), content, voice };
+		return { question: noteLabel(question), content, voice };
 	});
 	return new AnswerEntry(new EntryFormatter(clock)).lines(mode.questionFormat, mode.headLine, answers, [sampleTag]);
 }
