@@ -1,14 +1,17 @@
 import { Notice, Plugin } from "obsidian";
 import { CaptureService } from "./application/CaptureService";
+import { UsageStore } from "./application/ports";
 import { systemClock } from "./domain/Clock";
 import { daysBefore, DiaryDayClock } from "./domain/DiaryDayClock";
 import { listDestinations, markUsed, movePaths, pickDestination } from "./domain/CaptureMode";
+import { applyUsage, deviceUsage, sharedSettings } from "./domain/DeviceUsage";
 import { HtmlAudioPlayer } from "./infrastructure/HtmlAudioPlayer";
 import { MediaAudioRecorder } from "./infrastructure/MediaAudioRecorder";
 import { ObsidianAttachments } from "./infrastructure/ObsidianAttachments";
 import { ObsidianDailyNotes } from "./infrastructure/ObsidianDailyNotes";
 import { ObsidianNoteTargets } from "./infrastructure/ObsidianNoteTargets";
 import { ObsidianNoteWriter } from "./infrastructure/ObsidianNoteWriter";
+import { ObsidianUsageStore } from "./infrastructure/ObsidianUsageStore";
 import { CaptureSettings, loadSettings } from "./settings";
 import { CaptureModal } from "./ui/CaptureModal";
 import { dateTitle, NO_DESTINATIONS } from "./ui/CaptureScreen";
@@ -25,9 +28,10 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 	override settings: CaptureSettings = loadSettings(null);
 	private openCapture: (destinationId: string, fallBackToFirst: boolean) => void = () => {};
 	private destinationCommandIds: string[] = [];
+	private readonly usage: UsageStore = new ObsidianUsageStore(this.app);
 
 	override async onload(): Promise<void> {
-		this.settings = loadSettings(await this.loadData());
+		await this.loadSettings();
 
 		const diaryClock = new DiaryDayClock(systemClock, () => this.settings.dayEndsAt);
 		const dailyNotes = new ObsidianDailyNotes(this.app, diaryClock, (message) => new Notice(message));
@@ -59,10 +63,10 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 				dayTitle,
 				onDestinationChange: (id) => {
 					this.settings.lastDestinationId = id;
-					void this.saveSettings();
+					this.saveUsage();
 				},
 				onCaptured: (id) => {
-					if (markUsed(this.settings.modes, id, Date.now())) void this.saveSettings();
+					if (markUsed(this.settings.modes, id, Date.now())) this.saveUsage();
 				},
 				openNote: ({ path, line }) => void this.app.workspace.openLinkText(path, "", false, { eState: { line } }),
 				linkSourcePath: (destination) => targets.previewPath(destination.target),
@@ -82,13 +86,24 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 	}
 
 	override async onExternalSettingsChange(): Promise<void> {
-		this.settings = loadSettings(await this.loadData());
+		await this.loadSettings();
 		this.syncDestinationCommands();
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		await this.saveData(sharedSettings(this.settings));
+		this.saveUsage();
 		this.syncDestinationCommands();
+	}
+
+	private async loadSettings(): Promise<void> {
+		const settings = loadSettings(await this.loadData());
+		applyUsage(settings, this.usage.load());
+		this.settings = settings;
+	}
+
+	private saveUsage(): void {
+		this.usage.save(deviceUsage(this.settings));
 	}
 
 	private syncDestinationCommands(): void {
