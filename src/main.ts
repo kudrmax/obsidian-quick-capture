@@ -81,6 +81,11 @@ export default class QuickCapturePlugin extends Plugin implements SettingsHost {
 		);
 	}
 
+	override async onExternalSettingsChange(): Promise<void> {
+		this.settings = loadSettings(await this.loadData());
+		this.syncDestinationCommands();
+	}
+
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 		this.syncDestinationCommands();
