@@ -1,4 +1,5 @@
 import { NoteTarget } from "../domain/CaptureMode";
+import { DeviceUsage } from "../domain/DeviceUsage";
 
 export interface NoteTargets {
 	resolve(target: NoteTarget): Promise<string>;
@@ -27,4 +28,9 @@ export interface AudioRecording {
 	parts: AudioPart[];
 	extension: string;
 	durationMs: number;
+}
+
+export interface UsageStore {
+	load(): DeviceUsage | null;
+	save(usage: DeviceUsage): void;
 }
